@@ -405,3 +405,20 @@ STARK kodu MIT lisansı ile dağıtılır (`LICENSE`). STARK'ı kullanıyorsanı
   year={2021}
 }
 ```
+
+### Önceki çalışma
+
+Bu repo, önceki çalışmamızın devamıdır:
+
+> K. Bal, A. Uslu, A. C. Kılcı and B. Günsel, "Cross-Domain Video Object Detection," *2026 34th Signal Processing and Communications Applications Conference (SIU)*, 2026, pp. 1–4, doi: [10.1109/SIU71813.2026.11636768](https://doi.org/10.1109/SIU71813.2026.11636768).
+
+```bibtex
+@inproceedings{bal2026crossdomain,
+  author={Bal, Kerem and Uslu, Alper and K{\i}lc{\i}, A. Caner and G{\"u}nsel, Bilge},
+  title={Cross-Domain Video Object Detection},
+  booktitle={2026 34th Signal Processing and Communications Applications Conference (SIU)},
+  year={2026},
+  pages={1--4},
+  doi={10.1109/SIU71813.2026.11636768}
+}
+```
