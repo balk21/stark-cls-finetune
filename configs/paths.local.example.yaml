@@ -1,0 +1,5 @@
+# Copy this file to configs/paths.local.yaml and edit it (that file is ignored by git).
+# Only list the keys you want to change. Absolute paths or paths relative to the repository root are accepted.
+# checkpoints: /home/user/stark_checkpoints
+# dataset: /data/vot/votlt2020/sequences
+# outputs: /data/stark_outputs

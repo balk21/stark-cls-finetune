@@ -1,0 +1,20 @@
+# Large / machine-specific files
+checkpoints/
+data/
+outputs/
+configs/paths.local.yaml
+
+# Python / Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.part
+
+# Editors / operating systems
+.vscode/
+.idea/
+.cursor/
+.claude/
+*.Zone.Identifier
+.DS_Store
+desktop.ini

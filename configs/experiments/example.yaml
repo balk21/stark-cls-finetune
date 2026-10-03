@@ -1,0 +1,15 @@
+# Command-line usage example:
+#   python -m stark_ft run --config configs/experiments/example.yaml
+#   python -m stark_ft run --config configs/experiments/example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
+# Parameters that are not listed take their default values (README > Parameters).
+model: stark_st
+model_config: baseline_R101
+sequences: all
+update_interval: 100
+ft_mode: online
+ft_samples: pos
+ft_lr: 1.0e-4
+ft_epochs_init: 15
+ft_epochs_online: 1
+seed: 0
+eval_score_thr: 0.35
