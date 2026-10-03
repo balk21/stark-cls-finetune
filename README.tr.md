@@ -6,11 +6,8 @@ Bu depo, [STARK](https://github.com/researchmm/Stark) (ICCV 2021) tracker'ının
 test (inference) sırasında, her videoya özel olarak **sınıflandırma başlığını (cls_head) fine-tune etme**
 yöntemini ekler ve bunu **VOT-LT2020** üzerinde, **detection tarzı (COCO)** metriklerle değerlendirir.
 
-Tüm iş akışı Jupyter notebook'ları üzerinden yürür. Kod hiçbir sabit dosya yolu içermez; aynı depo
+Tüm iş akışı Jupyter notebook'ları üzerinden yürür. Kod hiçbir sabit dosya yolu içermez; aynı repo
 Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
-
-> Kod, notebook'lar, grafik etiketleri ve program çıktıları **İngilizcedir**. Bu dosya, İngilizce
-> [README.md](README.md)'nin Türkçe karşılığıdır; aşağıda alıntılanan mesajlar programın gerçek (İngilizce) çıktılarıdır.
 
 ---
 
