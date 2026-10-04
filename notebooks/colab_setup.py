@@ -195,6 +195,19 @@ def setup_dataset(drive_root: Path, local_root: Path, python: Path, download=Tru
     return seq_dir
 
 
+def check_gpu(python: Path) -> bool:
+    """Checks that PyTorch in the vot1 environment can use the GPU."""
+    code = ("import torch; ok = torch.cuda.is_available(); "
+            "print('GPU in vot1:', torch.cuda.get_device_name(0) if ok else 'NOT AVAILABLE')")
+    result = subprocess.run([str(python), "-c", code], capture_output=True, text=True)
+    print(result.stdout.strip() or result.stderr.strip()[-500:])
+    ok = "NOT AVAILABLE" not in result.stdout and result.returncode == 0
+    if not ok:
+        print("WARNING: PyTorch in the vot1 environment cannot use the GPU. Check that a GPU runtime is selected "
+              "(Runtime -> Change runtime type -> GPU) and run this cell again.")
+    return ok
+
+
 def write_paths(checkpoints: Path, dataset: Path, outputs: Path):
     path = REPO_ROOT / "configs" / "paths.local.yaml"
     path.write_text("# Written by notebooks/colab_setup.py (Google Colab session)\n"
@@ -220,10 +233,11 @@ def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoi
     (drive_root / "outputs").mkdir(parents=True, exist_ok=True)
 
     python = setup_environment(drive_root, local_root, rebuild=rebuild_env)
+    gpu_ok = check_gpu(python)
     ckpt = setup_checkpoints(drive_root, local_root, checkpoints)
     dataset = setup_dataset(drive_root, local_root, python, download=download_dataset)
     paths_file = write_paths(ckpt, dataset, drive_root / "outputs")
     os.environ["VOT1_PYTHON"] = str(python)  # used by nbhelper.python()
     _log(f"Session ready in {time.time() - t0:.0f} s. Paths: {paths_file}")
     return {"python": str(python), "checkpoints": str(ckpt), "dataset": str(dataset),
-            "outputs": str(drive_root / "outputs")}
+            "outputs": str(drive_root / "outputs"), "gpu": gpu_ok}

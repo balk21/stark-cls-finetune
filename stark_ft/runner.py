@@ -85,6 +85,12 @@ def _write_workspace(ws: Path, cfg: ExperimentConfig, paths: Paths, sequences, e
         f.write(f"paths = {REPO_ROOT}\n")
         f.write(f"python = {sys.executable}\n")
         f.write(f"timeout = {int(cfg.tracker_timeout)}\n")
+        # vot-toolkit overwrites LD_LIBRARY_PATH of the tracker process with `linkpaths` (empty by default).
+        # Where the GPU driver is only found through LD_LIBRARY_PATH (e.g. /usr/lib64-nvidia on Google Colab),
+        # the tracker would then not see the GPU, so the current value is passed on explicitly.
+        lib_dirs = [p for p in os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep) if p]
+        if lib_dirs:
+            f.write(f"linkpaths = {os.pathsep.join(lib_dirs)}\n")
         f.write(f"env_STARK_CLEAN_EXPERIMENT = {experiment_json}\n")
 
 
