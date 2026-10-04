@@ -391,7 +391,13 @@ def run_training(tc: TrainConfig, paths: Paths = None, overwrite: bool = False) 
         state = load_network_weights(str(init_path))
         state = {k: v for k, v in state.items() if not k.startswith(skip)} if skip else state
         missing, unexpected = model.load_state_dict(state, strict=False)
-        print(f"Loaded initial weights from {init_path}\n  missing keys: {missing}\n  unexpected keys: {unexpected}")
+        fresh = [k for k in missing if skip and k.startswith(skip)]
+        print(f"Loaded initial weights from {init_path}" +
+              (" (all except the classification head, which starts from random weights as in STARK stage 2)"
+               if fresh else ""))
+        other = [k for k in missing if k not in fresh]
+        if other or unexpected:  # should not happen; shown so that a wrong checkpoint is noticed
+            print(f"  WARNING: weights not found in the checkpoint: {other}\n  unused checkpoint weights: {unexpected}")
 
     trainer = LTRTrainer(actor, loaders, optimizer, settings, lr_scheduler)
     trainer.train(cfg.TRAIN.EPOCH, init_fn=init_fn)

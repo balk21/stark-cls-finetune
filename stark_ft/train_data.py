@@ -99,14 +99,24 @@ def direct_url(url: str) -> str:
     return f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t" if m else url
 
 
+QUOTA_HELP = ("Google Drive limits how often a shared file can be downloaded per day, and this file's limit is "
+              "used up (it may work again later). The reliable way: open the link in the browser, 'Add shortcut to "
+              "Drive', right-click the shortcut -> 'Make a copy', and put the copy into the GOT-10k archive folder (on "
+              "Colab <DRIVE_ROOT>/train_archives/got10k/). Your own copy has no such limit. See README, section 8.3.")
+
+
 def _open(url, headers=None):
     r = urllib.request.urlopen(urllib.request.Request(direct_url(url), headers=headers or {}), timeout=60)
     if r.headers.get("Content-Type", "").startswith("text/html"):
+        page = r.read(20000).decode("utf-8", errors="replace")
         r.close()
+        title = re.search(r"<title>(.*?)</title>", page, re.S)
+        title = title.group(1).strip() if title else ""
+        if "quota" in title.lower():
+            raise RuntimeError(f"{url}: '{title}'.\n{QUOTA_HELP}")
         raise RuntimeError(
-            f"{url} returned a web page instead of a file. Use the direct download link. For a Google Drive file this "
-            "usually means that its download quota is exceeded or that it is not shared with 'anyone with the link'; "
-            "on Colab, add the file to your own Drive instead (README, §8.3).")
+            f"{url} returned a web page ('{title}') instead of a file. Use a direct download link; a Google Drive file "
+            "must be shared with 'anyone with the link'.")
     return r
 
 
@@ -161,14 +171,23 @@ def _selected(name: str, members) -> bool:
     return members is None or any(fnmatch.fnmatch(name, pattern) for pattern in members)
 
 
+def _read_error(archive: Path, err) -> RuntimeError:
+    msg = f"Cannot read {archive}: {err}"
+    if "/drive/" in str(archive):  # Google Drive mount (Colab)
+        msg += ("\nIf this is a shortcut to a file shared by someone else, Google Drive probably refuses to serve it "
+                "because the file's download quota is used up.\n" + QUOTA_HELP)
+    else:
+        msg += "\nIf it is an incomplete download, delete it and run the preparation again."
+    return RuntimeError(msg)
+
+
 def _uncompressed_size(archive: Path, members=None) -> int:
     if archive.name.lower().endswith(".zip"):
         try:
             with zipfile.ZipFile(archive) as z:
                 return sum(i.file_size for i in z.infolist() if _selected(i.filename, members))
-        except zipfile.BadZipFile:
-            raise RuntimeError(f"{archive} is not a valid zip file (incomplete download?). Delete it and run the "
-                               "preparation again.") from None
+        except (zipfile.BadZipFile, OSError) as e:
+            raise _read_error(archive, e) from None
     return archive.stat().st_size * (1 if archive.name.lower().endswith(".tar") else 2)
 
 
@@ -204,7 +223,7 @@ def extract(archive: Path, dst: Path, members=None):
         if shutil.which("unzip"):
             rc = subprocess.run(["unzip", "-q", "-o", str(archive), *(members or ()), "-d", str(dst)]).returncode
             if rc not in (0, 1, 11):  # 1 = warnings only, 11 = no matching members
-                raise RuntimeError(f"unzip failed for {archive} (exit code {rc})")
+                raise _read_error(archive, f"unzip failed (exit code {rc})")
         else:
             with zipfile.ZipFile(archive) as z:
                 z.extractall(dst, [n for n in z.namelist() if _selected(n, members)])

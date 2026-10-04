@@ -55,8 +55,8 @@ def _log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def _run(cmd, env=None, cwd=None):
-    """Runs a command and streams its output (stdlib only)."""
+def _run(cmd, env=None, cwd=None, quiet=False):
+    """Runs a command and streams its output (stdlib only). quiet=True: the output is only shown if it fails."""
     full_env = os.environ.copy()
     full_env["PYTHONUNBUFFERED"] = "1"
     full_env["MPLBACKEND"] = "Agg"
@@ -64,10 +64,17 @@ def _run(cmd, env=None, cwd=None):
         full_env.update(env)
     proc = subprocess.Popen([str(c) for c in cmd], env=full_env, cwd=str(cwd or REPO_ROOT),
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    captured = []
     for chunk in iter(lambda: proc.stdout.read1(4096), b""):
-        sys.stdout.write(chunk.decode("utf-8", errors="replace"))
-        sys.stdout.flush()
+        text = chunk.decode("utf-8", errors="replace")
+        if quiet:
+            captured.append(text)
+        else:
+            sys.stdout.write(text)
+            sys.stdout.flush()
     if proc.wait() != 0:
+        if quiet:
+            sys.stdout.write("".join(captured)[-20000:])
         raise RuntimeError(f"Command failed: {' '.join(str(c) for c in cmd)}")
 
 
@@ -138,8 +145,8 @@ def setup_environment(drive_root: Path, local_root: Path, rebuild=False) -> Path
                 env["CONDA_OVERRIDE_CUDA"] = cuda
             if env_dir.exists():
                 shutil.rmtree(env_dir)
-            _run([exe, "create", "-y", "-q", "-n", "vot1", "-f", ENV_FILE], env=env)
-            _run([exe, "clean", "-y", "-a", "-q"], env=env)  # drop the package cache (~3 GB)
+            _run([exe, "create", "-y", "-q", "-n", "vot1", "-f", ENV_FILE], env=env, quiet=True)
+            _run([exe, "clean", "-y", "-a", "-q"], env=env, quiet=True)  # drop the package cache (~3 GB)
     if not cache.is_file():
         # Also covers a session where the environment was created but caching was interrupted
         _log(f"Caching the environment on Drive: {cache} ...")

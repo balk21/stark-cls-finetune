@@ -70,8 +70,9 @@ def in_colab() -> bool:
 
 def colab_bootstrap(**kwargs) -> dict:
     """Prepares a Google Colab session (environment, checkpoints, dataset, paths). See colab_setup.bootstrap."""
-    from colab_setup import bootstrap
-    info = bootstrap(**kwargs)
+    import importlib
+    import colab_setup
+    info = importlib.reload(colab_setup).bootstrap(**kwargs)  # reload: the code may have changed (git pull)
     _PATHS_CACHE.clear()
     _COLAB_INFO.update(info)
     return info

@@ -450,11 +450,14 @@ gerekir; doğrulamasız eğitim için `val_datasets=[]` verin.
 kayıttan sonra indirilebilir; indirme linkleri e-postayla gelir. Linkler Google Drive'a da işaret edebilir, örn.
 `full_data.zip` (70.7 GB; içinde `train/`, `val/` ve `test/` vardır). Arşivler üç şekilde verilebilir:
 
-1. **Colab'de, Google Drive'daki bir dosya için (önerilen):** linki tarayıcıda Colab'de kullandığınız Google hesabıyla
-   açın, *Drive'a kısayol ekle* seçeneğiyle kısayolu `MyDrive/LOKAP/train_archives/got10k/` klasörüne
-   koyun ve `GOT10K_URLS` listesini boş bırakın. Hiçbir şey indirilmez veya kopyalanmaz: arşiv her yeni oturumda
-   Drive'dan okunur ve yerel diske açılır. Dosyanın indirme kotası dolduğu için okuma başarısız olursa, bunun yerine
-   aynı klasöre bir kopyasını oluşturun (kısayola sağ tık → *Kopyasını oluştur*; Drive'da 70.7 GB yer gerekir).
+1. **Colab'de, Google Drive'daki bir dosya için (önerilen):** dosyanın **kendi kopyanızı**
+   `MyDrive/LOKAP/train_archives/got10k/` klasörüne koyun ve `GOT10K_URLS` listesini boş bırakın: linki tarayıcıda
+   Colab'de kullandığınız Google hesabıyla açın, *Drive'a kısayol ekle*, kısayola sağ tık → *Kopyasını oluştur*,
+   oluşan kopyayı (`Copy of full_data.zip`; adı önemli değil) o klasöre taşıyın. Kopya Google Drive'ın içinde yapılır
+   (hiçbir şey indirilmez) ve Drive'da 70.7 GB yer kaplar; arşiv sonra her yeni oturumda Drive'dan okunup yerel diske
+   açılır. Neden kopya: bu dosya gibi popüler paylaşılan dosyalar Google Drive'ın günlük indirme sınırına sık sık
+   takılır ("Quota exceeded"); o durumda ne indirme ne kısayol çalışır, ama kendi kopyanız çalışır. Yalnızca kısayol
+   (Drive'da yer gerektirmez) ancak paylaşılan dosya sınırın altındayken çalışır.
 2. `GOT10K_URLS` içinde **linkler** (CLI: `--got10k-url`): arşiv klasörüne bir kez indirilir, kaldığı yerden devam
    edebilir. Google Drive paylaşım linkleri (`https://drive.google.com/file/d/<id>/view...`) doğrudan indirme linkine
    çevrilir. Colab'de arşiv klasörü Drive'da olduğu için 70 GB'lık indirme mount üzerinden Drive'a yazılır; 1. yol

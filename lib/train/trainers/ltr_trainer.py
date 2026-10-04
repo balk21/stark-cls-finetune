@@ -80,7 +80,7 @@ class LTRTrainer(BaseTrainer):
             samples += batch_size
             self._update_stats(stats, batch_size, loader)
             boundary = (not loader.training) or i % self.accum_steps == 0
-            if boundary and (step % self.settings.print_interval == 0 or step == steps):
+            if boundary and (step == 1 or step % self.settings.print_interval == 0 or step == steps):
                 self._print_stats(loader, step, steps, samples, start)
 
     def _print_stats(self, loader, step, steps, samples, start):

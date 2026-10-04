@@ -449,12 +449,14 @@ from `GOT10K_vottrain` (as in STARK). It needs the GOT-10k folder even when trai
 e-mail. They may point to Google Drive, e.g. `full_data.zip` (70.7 GB; contains `train/`, `val/` and `test/`).
 The archives can be given in three ways:
 
-1. **On Colab, for a file on Google Drive (recommended):** open the link in the browser with the Google account you
-   use in Colab, choose *Add shortcut to Drive* and put the shortcut into
-   `MyDrive/LOKAP/train_archives/got10k/`; leave `GOT10K_URLS` empty. Nothing is downloaded or copied:
-   the archive is read from Drive and extracted to the local disk in every new session. If reading it fails because
-   the file's download quota is exceeded, make a copy of it into the same folder instead (right-click the shortcut →
-   *Make a copy*; needs 70.7 GB of Drive space).
+1. **On Colab, for a file on Google Drive (recommended):** put **your own copy** of the file into
+   `MyDrive/LOKAP/train_archives/got10k/` and leave `GOT10K_URLS` empty: open the link in the browser with the Google
+   account you use in Colab, *Add shortcut to Drive*, right-click the shortcut → *Make a copy*, and move the copy
+   (`Copy of full_data.zip`; the name does not matter) into that folder. The copy is made inside Google Drive
+   (nothing is downloaded) and needs 70.7 GB of Drive space; the archive is then read from Drive and extracted to the
+   local disk in every new session. Why a copy: popular shared files such as this one regularly hit Google Drive's
+   daily download limit ("Quota exceeded"); then neither a download nor a shortcut works, but your own copy does.
+   A shortcut alone (no Drive space needed) only works while the shared file is under its limit.
 2. **Links** in `GOT10K_URLS` (CLI: `--got10k-url`): downloaded once into the archive folder, resumable. Google Drive
    share links (`https://drive.google.com/file/d/<id>/view...`) are converted to direct downloads. On Colab the archive
    folder is on Drive, so a 70 GB download is written to Drive through the mount; option 1 avoids that.
