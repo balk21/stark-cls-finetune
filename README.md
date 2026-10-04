@@ -62,7 +62,8 @@ runs on a Vast.ai server and on a personal computer.
 1. Open `notebooks/00_setup_colab.ipynb` in Colab with the badge above and choose
    *Runtime → Change runtime type → GPU* (T4, L4 or A100).
 2. Run the cells. Google Drive is mounted, and the **same `vot1` environment** as on Vast.ai is created with
-   micromamba (same package versions; the tracker output is bit-identical to a local `vot1` run).
+   micromamba (same package versions). Note: results are only identical on the same GPU type; see
+   [Results across GPUs](#results-across-gpus).
 3. Then open `01_run_experiment.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/01_run_experiment.ipynb) and `02_compare.ipynb`
    [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) in Colab.
 
@@ -403,6 +404,28 @@ python -m tests.test_sampling                              # tests of the negati
 - **There is no principled way to choose `ft_lr` / `ft_epochs_*`.** The values are empirical. Keep in mind that
   choosing hyperparameters on the test sequences makes the results look optimistic.
 - **vot-toolkit restarts the tracker process for every sequence** (the model is reloaded per sequence, ~3–4 s).
+
+### Results across GPUs
+
+The same environment gives **bit-identical** results only on the **same GPU type**. Different GPUs use different
+numerical kernels; in addition, on Ampere and newer GPUs (RTX 3000/4000, A100, ...) PyTorch computes convolutions in
+TF32 by default, while older GPUs such as the T4 (Colab) compute in full FP32. Tracking feeds every frame into the
+next, so tiny numerical differences can grow.
+
+Example (`bull`, online, pos, 15+15 steps, lr 1e-5, interval 100; legacy AP):
+
+| Run | legacy AP |
+|---|---|
+| RTX 3060 (TF32 on, default), 8 seeds | 0.521 ± 0.001 |
+| RTX 3060, TF32 off (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
+| Tesla T4 (Colab) | 0.432 |
+| Baseline STARK-ST without fine-tuning, RTX 3060, TF32 on / off | 0.476 / 0.479 |
+
+The baseline is insensitive to this, but online fine-tuning is not: in this sequence both runs are identical up to
+frame 1599; at frame 1600 the tracker is on the wrong object and, depending on tiny numerical differences, its score is
+either 0.19 (no update) or 1.00 (template update **and** 15 fine-tuning steps on the wrong object, after which the
+tracker stays on the distractor). **Therefore: run all experiments that are compared with each other on the same GPU
+type, and report the GPU.** Seeds alone do not capture this variability.
 
 ## 11. Changes from the earlier research code
 

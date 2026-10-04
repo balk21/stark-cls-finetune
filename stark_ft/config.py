@@ -175,11 +175,34 @@ class ExperimentConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExperimentConfig":
-        valid = {f.name for f in fields(cls)}
-        unknown = set(data) - valid
+        types = {f.name: f.type for f in fields(cls)}
+        unknown = set(data) - set(types)
         if unknown:
             raise ValueError(f"Unknown parameter(s): {sorted(unknown)}")
-        return cls(**data)
+        return cls(**{k: _coerce(k, v, types[k]) for k, v in data.items()})
+
+
+def _coerce(name, value, type_):
+    """Converts strings to the declared type of a parameter. YAML (1.1) reads e.g. `1e-5` as a string,
+    which would otherwise silently reach the tracker as text."""
+    if not isinstance(value, str):
+        if type_ is float and isinstance(value, int) and not isinstance(value, bool):
+            return float(value)
+        return value
+    try:
+        if type_ is float:
+            return float(value)
+        if type_ is int:
+            return int(value)
+        if type_ is bool:
+            if value.strip().lower() in ("true", "yes", "1"):
+                return True
+            if value.strip().lower() in ("false", "no", "0"):
+                return False
+            raise ValueError
+    except ValueError:
+        raise ValueError(f"Parameter {name}={value!r} cannot be converted to {type_.__name__}") from None
+    return value
 
     @classmethod
     def from_file(cls, path) -> "ExperimentConfig":

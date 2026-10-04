@@ -62,7 +62,8 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
 1. Yukarıdaki rozetle `notebooks/00_setup_colab.ipynb` dosyasını Colab'de açın ve
    *Runtime → Change runtime type → GPU* (T4, L4 veya A100) seçin.
 2. Hücreleri çalıştırın. Google Drive bağlanır ve Vast.ai'daki ile **aynı `vot1` ortamı** micromamba ile kurulur
-   (aynı paket sürümleri; tracker çıktısı yerel `vot1` koşusuyla bit düzeyinde aynıdır).
+   (aynı paket sürümleri). Not: sonuçlar yalnızca aynı GPU tipinde birebir aynıdır; bkz.
+   [GPU'lar arası sonuçlar](#gpular-arası-sonuçlar).
 3. Ardından `01_run_experiment.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/01_run_experiment.ipynb) ve `02_compare.ipynb`
    [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) notebook'larını Colab'de açın.
 
@@ -402,6 +403,28 @@ python -m tests.test_sampling                              # negatif örnek geom
 - **`ft_lr` / `ft_epochs_*` için teorik bir seçim yöntemi yok.** Değerler deneyseldir. Hiperparametreleri test
   dizileri üzerinde seçmenin sonuçları iyimser göstereceğini unutmayın.
 - **vot-toolkit her dizi için tracker sürecini yeniden başlatır** (model her dizide yeniden yüklenir, ~3–4 sn).
+
+### GPU'lar arası sonuçlar
+
+Aynı ortam, yalnızca **aynı GPU tipinde** bit düzeyinde aynı sonucu verir. Farklı GPU'lar farklı sayısal çekirdekler
+kullanır; ayrıca Ampere ve sonrası GPU'larda (RTX 3000/4000, A100, ...) PyTorch konvolüsyonları varsayılan olarak TF32
+ile hesaplarken T4 (Colab) gibi eski GPU'lar tam FP32 hesaplar. Tracking her kareyi bir sonrakine aktardığı için çok
+küçük sayısal farklar büyüyebilir.
+
+Örnek (`bull`, online, pos, 15+15 adım, lr 1e-5, interval 100; legacy AP):
+
+| Koşu | legacy AP |
+|---|---|
+| RTX 3060 (TF32 açık, varsayılan), 8 seed | 0.521 ± 0.001 |
+| RTX 3060, TF32 kapalı (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
+| Tesla T4 (Colab) | 0.432 |
+| Fine-tune'suz STARK-ST baseline, RTX 3060, TF32 açık / kapalı | 0.476 / 0.479 |
+
+Baseline bundan etkilenmiyor, online fine-tune ise etkileniyor: bu dizide iki koşu kare 1599'a kadar aynı; kare
+1600'de tracker yanlış nesnenin üzerinde ve küçük sayısal farklara bağlı olarak skoru ya 0.19 (update yok) ya da
+1.00 oluyor (yanlış nesneyle template update **ve** 15 fine-tune adımı; sonrasında tracker benzer nesnede kalıyor).
+**Bu yüzden birbiriyle karşılaştırılan tüm deneyleri aynı GPU tipinde koşun ve GPU'yu raporlayın.** Seed'ler tek
+başına bu değişkenliği yakalamaz.
 
 ## 11. Eski koddan farklar ve düzeltilen hatalar
 
