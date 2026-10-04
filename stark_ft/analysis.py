@@ -16,8 +16,9 @@ from stark_ft.evaluation import (coco_standard, evaluate_sequence, f_curve_from_
 from stark_ft.paths import Paths, get_paths
 from stark_ft.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
 
-SUMMARY_METRICS = ["AP", "AP50", "AP75", "precision", "recall", "F1", "precision_opt", "recall_opt", "F_opt",
-                   "absent_reject_rate", "mean_iou_visible", "legacy_AP", "legacy_AP50", "legacy_AP75"]
+# Order of the summary tables: the primary metrics (mAP / AP50 / AP75) first
+SUMMARY_METRICS = ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall", "F1",
+                   "absent_reject_rate", "mean_iou_visible", "legacy_mAP", "legacy_AP50", "legacy_AP75"]
 
 
 def _dataset_dir(meta: dict, paths: Paths) -> Path:
@@ -107,9 +108,8 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
             plot_data[seq] = (frames, events, ft)
 
         if verbose:
-            print(f"  {seq:<14s} AP={metrics['AP']:.3f}  AP50={metrics['AP50']:.3f}  "
-                  f"P={metrics['precision']:.3f}  R={metrics['recall']:.3f}  F1={metrics['F1']:.3f}  "
-                  f"(threshold {score_thr:g})")
+            print(f"  {seq:<14s} mAP={metrics['mAP']:.3f}  AP50={metrics['AP50']:.3f}  AP75={metrics['AP75']:.3f}  "
+                  f"|  F1={metrics['F1']:.3f} (threshold {score_thr:g})")
 
     if not per_seq:
         raise RuntimeError(f"No completed sequence to analyse: {out_dir}")
@@ -129,7 +129,7 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
     mean_over["F1"] = _f_from(mean_over["precision"], mean_over["recall"])
     mean_over["F_opt"] = best["F"]
 
-    pooled = {"AP": np.nan, "AP50": np.nan, "AP75": np.nan}
+    pooled = {"mAP": np.nan, "AP50": np.nan, "AP75": np.nan}
     pooled.update(coco_standard(all_records))
     pooled.update(operating_point(all_records, score_thr, iou_thr))
     pooled_opt = operating_point(all_records, best["threshold"], iou_thr)
@@ -180,10 +180,12 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         curve_df.to_excel(writer, sheet_name="f_curve", index=False)
         params_df.to_excel(writer, sheet_name="parameters", index=False)
 
-    seq_cols = ["AP", "AP50", "precision", "recall", "F1", "precision_opt", "recall_opt", "F_opt",
+    seq_cols = ["mAP", "AP50", "AP75", "F_opt", "precision_opt", "recall_opt", "F1",
                 "absent_reject_rate", "mean_iou_visible", "absent_frames", "template_updates", "ft_updates"]
     lines = [f"Experiment: {exp_name}",
              f"Sequences: {len(per_seq)}  (skipped: {skipped or 'none'})",
+             f"mAP / AP50 / AP75 (mean over sequences): {mean_over['mAP']:.4f} / {mean_over['AP50']:.4f} / "
+             f"{mean_over['AP75']:.4f}",
              f"F-max threshold (VOT method, {thr_resolution} candidates): score >= {best['threshold']:.4f}  ->  "
              f"P={best['precision']:.4f}  R={best['recall']:.4f}  F={best['F']:.4f}",
              f"Fixed threshold: score >= {score_thr:g}  ->  P={mean_over['precision']:.4f}  R={mean_over['recall']:.4f}  "
@@ -195,5 +197,5 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
              table[seq_cols].to_string(float_format=lambda v: f"{v:.3f}")]
     (metrics_dir / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if verbose:
-        print("\n" + "\n".join(lines[:7]))  # per-sequence lines were already printed above
+        print("\n" + "\n".join(lines[:8]))  # per-sequence lines were already printed above
     return {"summary": summary, "per_sequence": table, "summary_table": summary_df, "f_curve": curve_df}

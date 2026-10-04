@@ -17,9 +17,21 @@ def list_experiments(outputs_dir=None):
     return sorted(p.name for p in outputs_dir.iterdir() if (p / "metrics" / "metrics.json").is_file())
 
 
+# Metric names used before AP@[.50:.95] was renamed to mAP (metrics.json files written by older versions)
+_RENAMED = {"AP": "mAP", "legacy_AP": "legacy_mAP"}
+
+
+def _renamed(d: dict) -> dict:
+    return {_RENAMED.get(k, k): v for k, v in d.items()}
+
+
 def _load(name, outputs_dir):
     with open(Path(outputs_dir) / name / "metrics" / "metrics.json") as f:
-        return json.load(f)
+        data = json.load(f)
+    for kind in ("mean_over_sequences", "pooled"):
+        data["summary"][kind] = _renamed(data["summary"][kind])
+    data["per_sequence"] = [_renamed(r) for r in data["per_sequence"]]
+    return data
 
 
 def load_summaries(names, kind="mean_over_sequences", outputs_dir=None) -> pd.DataFrame:
@@ -41,7 +53,7 @@ def load_parameters(names, outputs_dir=None, only_different=True) -> pd.DataFram
     return df
 
 
-def per_sequence(names, metric="F1", outputs_dir=None) -> pd.DataFrame:
+def per_sequence(names, metric="mAP", outputs_dir=None) -> pd.DataFrame:
     """Rows = sequences, columns = experiments; for a single metric."""
     outputs_dir = Path(outputs_dir) if outputs_dir else get_paths().outputs
     cols = {}
@@ -59,6 +71,6 @@ def export_comparison(names, out_path, outputs_dir=None):
         load_summaries(names, "pooled", outputs_dir).to_excel(writer, sheet_name="pooled")
         load_parameters(names, outputs_dir, only_different=False).to_excel(writer, sheet_name="parameters")
         load_summaries(names, "optimal_threshold", outputs_dir).to_excel(writer, sheet_name="optimal_threshold")
-        for m in ("AP", "F_opt", "F1", "precision", "recall"):
+        for m in ("mAP", "AP50", "AP75", "F_opt", "F1"):
             per_sequence(names, m, outputs_dir).to_excel(writer, sheet_name=f"per_seq_{m}")
     return out_path

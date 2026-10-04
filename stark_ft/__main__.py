@@ -89,28 +89,29 @@ def cmd_compare(args):
     fmt = lambda v: f"{v:.4f}"  # noqa: E731
     print("== Parameter differences ==")
     print(compare.load_parameters(names).to_string())
+    print("\n== mAP / AP50 / AP75 (mean over sequences) ==")
+    print(compare.load_summaries(names, "mean_over_sequences")[["mAP", "AP50", "AP75"]].to_string(float_format=fmt))
     print("\n== F-max threshold (VOT method, P/R averaged over sequences) ==")
     print(compare.load_summaries(names, "optimal_threshold")[["threshold", "precision", "recall", "F"]]
           .to_string(float_format=fmt))
     for kind, title in (("mean_over_sequences", "Mean over sequences"), ("pooled", "Pooled (all frames)")):
         print(f"\n== {title} ==")
         df = compare.load_summaries(names, kind)
-        cols = [c for c in ["AP", "AP50", "AP75", "precision", "recall", "F1", "precision_opt", "recall_opt",
-                            "F_opt", "absent_reject_rate", "mean_iou_visible", "legacy_AP", "legacy_AP50",
+        cols = [c for c in ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall",
+                            "F1", "absent_reject_rate", "mean_iou_visible", "legacy_mAP", "legacy_AP50",
                             "n_sequences"] if c in df.columns]
         print(df[cols].to_string(float_format=fmt))
     if len(names) >= 2:
-        f_opt = compare.per_sequence(names, "F_opt")
-        print(f"\n== F per sequence (each experiment at its own F-max threshold; reference: {names[0]}, "
-              f"difference = experiment - reference) ==")
-        diff = f_opt.sub(f_opt[names[0]], axis=0).drop(columns=names[0])
-        print(pd.concat([f_opt[[names[0]]], diff.add_prefix("Δ ")], axis=1).to_string(float_format=fmt))
+        for metric in ("mAP", "AP50", "AP75"):
+            table = compare.per_sequence(names, metric)
+            print(f"\n== {metric} per sequence (reference: {names[0]}, difference = experiment - reference) ==")
+            diff = table.sub(table[names[0]], axis=0).drop(columns=names[0])
+            print(pd.concat([table[[names[0]]], diff.add_prefix("Δ ")], axis=1).to_string(float_format=fmt))
     if args.out:
         print(f"\nExcel: {compare.export_comparison(names, args.out)}")
     if args.plot:
         df = compare.load_summaries(names, "mean_over_sequences")
-        plot_metric_comparison(df, ["AP", "AP50", "precision_opt", "recall_opt", "F_opt", "F1", "absent_reject_rate"],
-                               args.plot)
+        plot_metric_comparison(df, ["mAP", "AP50", "AP75", "F_opt", "absent_reject_rate"], args.plot)
         print(f"Plot: {args.plot}")
     return 0
 

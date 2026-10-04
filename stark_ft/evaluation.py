@@ -2,7 +2,9 @@
 Detection-style evaluation (every frame = one "image", the target = a single object).
 
 Metric families:
-  1. COCO AP / AP50 / AP75 (pycocotools, standard usage)
+  1. COCO mAP / AP50 / AP75 (pycocotools, standard usage) — the primary metrics
+       - mAP is COCO's main "AP": precision averaged over recall and over the IoU thresholds
+         0.50:0.05:0.95. AP50 / AP75 use a single IoU threshold (0.50 / 0.75).
        - ALL frames except the first (init) frame are evaluated.
        - Frames where the target is not visible (GT = NaN) are added as images without annotations;
          every prediction on those frames counts as a false positive.
@@ -114,11 +116,11 @@ def iou(a, b):
 # ------------------------------------------------------------------ COCO
 def _coco_ap(images, annotations, detections):
     """images: [img_id], annotations: [(img_id, box)], detections: [(img_id, box, score)]."""
-    nan3 = {"AP": float("nan"), "AP50": float("nan"), "AP75": float("nan")}
+    nan3 = {"mAP": float("nan"), "AP50": float("nan"), "AP75": float("nan")}
     if not annotations:
         return nan3
     if not detections:
-        return {"AP": 0.0, "AP50": 0.0, "AP75": 0.0}
+        return {"mAP": 0.0, "AP50": 0.0, "AP75": 0.0}
     gt = COCO()
     gt.dataset = {
         "info": {"description": "VOT-LT GT"},
@@ -137,7 +139,8 @@ def _coco_ap(images, annotations, detections):
         ev.evaluate()
         ev.accumulate()
         ev.summarize()
-    return {"AP": float(ev.stats[0]), "AP50": float(ev.stats[1]), "AP75": float(ev.stats[2])}
+    # stats[0] = AP@[.50:.95] (reported as mAP), stats[1] = AP@.50, stats[2] = AP@.75
+    return {"mAP": float(ev.stats[0]), "AP50": float(ev.stats[1]), "AP75": float(ev.stats[2])}
 
 
 def coco_standard(records):
@@ -171,7 +174,7 @@ def coco_legacy(gt_boxes, pred_boxes, scores, score_thr):
             continue  # old code: predictions below the threshold are dropped
         dets.append((idx, p, s))
     if not images:
-        return {"AP": float("nan"), "AP50": float("nan"), "AP75": float("nan")}
+        return {"mAP": float("nan"), "AP50": float("nan"), "AP75": float("nan")}
     return _coco_ap(images, anns, dets)
 
 

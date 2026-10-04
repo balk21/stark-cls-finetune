@@ -115,7 +115,7 @@ stark-cls-finetune/
 │   ├── runner.py                 VOT workspace setup + `vot evaluate` + collecting results
 │   ├── vot_entry.py              Tracker process that vot-toolkit starts for every sequence
 │   ├── tracker_factory.py        Builds the tracker object from the parameters
-│   ├── evaluation.py             COCO AP, P/R/F1, F-max threshold, legacy COCO
+│   ├── evaluation.py             COCO mAP/AP50/AP75, P/R/F1, F-max threshold, legacy COCO
 │   ├── analysis.py               Metric tables + plot generation
 │   ├── plots.py                  Plots
 │   ├── compare.py                Comparing experiments
@@ -240,7 +240,7 @@ Parameters that are not given take their default values.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `eval_score_thr` | `0.35` | **Fixed** threshold: score threshold for the "tracker found the target" decision. Only affects the `precision / recall / F1` columns; does not affect AP or the F-max threshold result. |
+| `eval_score_thr` | `0.35` | **Fixed** threshold: score threshold for the "tracker found the target" decision. Only affects the `precision / recall / F1` columns; does not affect mAP / AP50 / AP75 or the F-max threshold result. |
 | `eval_iou_thr` | `0.5` | Minimum IoU for a found box to count as correct (both at the fixed threshold and in the F-max search). |
 | `eval_thr_resolution` | `100` | Number of candidate thresholds in the F-max threshold search (vot-toolkit default: 100). |
 
@@ -278,7 +278,7 @@ Every experiment is written to `outputs/<experiment name>/`.
 | `tracker_logs/<seq>/events.txt` | CSV: `frame, event, conf_score`. `event` = `template_update` or `ft_update`. |
 | `plots/<seq>/iou_conf.png` | IoU and confidence score vs. frame number. Grey hatched area: target absent. Red dashed: template update. Green dotted: fine-tuning update. Black dash-dot: fixed threshold (`eval_score_thr`). Purple: F-max threshold. |
 | `plots/<seq>/finetune_loss.png` | Loss on top (log scale), positive/negative sample probabilities below. Vertical lines are session starts (`init`, `f<frame>`). |
-| `metrics/summary.txt` | Readable summary (first lines: F-max threshold and fixed threshold results) + per-sequence table |
+| `metrics/summary.txt` | Readable summary (first lines: mAP / AP50 / AP75, then the F-max threshold and fixed threshold results) + per-sequence table |
 | `metrics/metrics.xlsx` | Sheets `summary`, `optimal_threshold`, `per_sequence`, `f_curve`, `parameters` |
 | `metrics/f_curve.csv` | Sequence-averaged `precision`, `recall`, `F` at every candidate threshold |
 | `metrics/f_curve.png` | P / R / F vs. threshold on the left (purple: selected threshold, black: fixed threshold), precision–recall curve on the right |
@@ -293,13 +293,19 @@ number minus 1. The first frame is not evaluated (the GT is given to the tracker
 The evaluation is **detection**-style: every frame is an "image", the target is a single object. The computation
 uses the `pycocotools` library (`stark_ft/evaluation.py`).
 
-### 7.1 COCO AP / AP50 / AP75 (standard usage)
+**Primary metrics: mAP, AP50 and AP75** (§7.1). They are listed first in every summary, table and comparison.
 
+### 7.1 mAP / AP50 / AP75 (standard COCO usage)
+
+- **mAP** is COCO's main "AP" (`stats[0]` of `COCOeval`): precision averaged over recall levels and over the IoU
+  thresholds 0.50, 0.55, …, 0.95. **AP50** and **AP75** use a single IoU threshold (0.50 / 0.75).
+- In the summaries, "mean over sequences" is the mean of the per-sequence values (as in the old `coco_eval.py`
+  MEAN row); "pooled" treats all frames of all sequences as one dataset.
 - **All** frames except the first one are evaluated.
 - Frames where the target is not visible (GT = NaN) are added as images without annotations. Every prediction on
   these frames counts as a **false positive**.
-- **No score threshold is applied**: all predictions are given with their scores. AP already measures the quality
-  of the score ranking over all thresholds. A threshold can never increase AP.
+- **No score threshold is applied**: all predictions are given with their scores. mAP already measures the quality
+  of the score ranking over all thresholds. A threshold can never increase mAP / AP50 / AP75.
 - Coordinates are used as floats.
 
 ### 7.2 "Found / not found" metrics at a fixed threshold
@@ -348,7 +354,7 @@ counting threshold by threshold; the selected threshold matches a brute-force se
 ### 7.4 Other
 
 - `mean_iou_visible`: mean IoU over frames where the target is visible (no threshold).
-- `legacy_AP / legacy_AP50 / legacy_AP75`: **exactly** the computation of the earlier
+- `legacy_mAP / legacy_AP50 / legacy_AP75`: **exactly** the computation of the earlier
   `testler/detailed_analysis/coco_eval.py` script (frames without the target excluded, predictions below the
   threshold dropped, coordinates rounded to integers). Only for comparison with old results; it does not penalise
   false detections on frames without the target. Verified to match the old script on 5 sequences.
@@ -412,9 +418,9 @@ numerical kernels; in addition, on Ampere and newer GPUs (RTX 3000/4000, A100, .
 TF32 by default, while older GPUs such as the T4 (Colab) compute in full FP32. Tracking feeds every frame into the
 next, so tiny numerical differences can grow.
 
-Example (`bull`, online, pos, 15+15 steps, lr 1e-5, interval 100; legacy AP):
+Example (`bull`, online, pos, 15+15 steps, lr 1e-5, interval 100; legacy mAP):
 
-| Run | legacy AP |
+| Run | legacy mAP |
 |---|---|
 | RTX 3060 (TF32 on, default), 8 seeds | 0.521 ± 0.001 |
 | RTX 3060, TF32 off (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
@@ -436,21 +442,20 @@ This repository is a cleaned-up version of earlier, unpublished research code. T
 | 1 | `STARK_FT_MODE=all` was undefined; since the tracker only recognised `online`, **online fine-tuning never ran** in experiments named "online". | Modes are `none / init / online`; an invalid value raises an error. |
 | 2 | The negative region was shifted by `2·max(w,h)` from the GT; since the half side of the search crop is `2.5·sqrt(w·h)`, **the negative crop contained the target** for targets with aspect ratio below ≈ 1.56; clamping to the image border made it worse. | The shift is computed from the crop size; tested on 20,000 random cases that the target lies completely outside the crop. |
 | 3 | The evaluation wrapper passed the full GT of the test sequence to the tracker (future frames without the target were picked for negatives): **test label leakage**. | Removed. The tracker only sees the first-frame box. |
-| 4 | A parameter file silently loaded `STARKSTcoco_ep0050.pth.tar` if it existed, so "baseline" results may have used the COCO checkpoint. | The checkpoint is chosen only via the `checkpoint` parameter and recorded in `experiment.json`. |
-| 5 | No fixed seed; the jitter differed between runs. | `seed` parameter; results are exactly reproducible with the same seed (verified). |
-| 6 | `coco_eval.py` excluded frames without the target and applied the score threshold before computing AP. | Standard COCO usage + P/R/F1 at a threshold + F-max threshold; the old computation is kept as `legacy_*`. |
-| 7 | `Preprocessor` converted images to tensors via `tolist()` (very slow). | The original STARK version (`torch.tensor(ndarray)`). |
-| 8 | `vot evaluate` also ran the `redetection` experiment of the VOT-LT2020 stack (~2× time). | Only `longterm` by default; can be enabled with `run_redetection=True`. |
-| 9 | Paths were hard-coded absolute paths of the development machine; the Vast.ai setup script moved the sequences into the wrong workspace. | No hard-coded paths; every experiment creates its own VOT workspace. |
-| 10 | The model downloaded the ImageNet ResNet weights at every start (then overwrote them with the checkpoint). | The download is skipped. |
-| 11 | A separate entry file for every parameter combination (~40 files) and dozens of `run_*.py` scripts. | A single entry point: `ExperimentConfig` + `vot_entry.py`. |
+| 4 | No fixed seed; the jitter differed between runs. | `seed` parameter; results are exactly reproducible with the same seed (verified). |
+| 5 | `coco_eval.py` excluded frames without the target and applied the score threshold before computing mAP. | Standard COCO usage + P/R/F1 at a threshold + F-max threshold; the old computation is kept as `legacy_*`. |
+| 6 | `Preprocessor` converted images to tensors via `tolist()` (very slow). | The original STARK version (`torch.tensor(ndarray)`). |
+| 7 | `vot evaluate` also ran the `redetection` experiment of the VOT-LT2020 stack (~2× time). | Only `longterm` by default; can be enabled with `run_redetection=True`. |
+| 8 | Paths were hard-coded absolute paths of the development machine; the Vast.ai setup script moved the sequences into the wrong workspace. | No hard-coded paths; every experiment creates its own VOT workspace. |
+| 9 | The model downloaded the ImageNet ResNet weights at every start (then overwrote them with the checkpoint). | The download is skipped. |
+| 10 | A separate entry file for every parameter combination (~40 files) and dozens of `run_*.py` scripts. | A single entry point: `ExperimentConfig` + `vot_entry.py`. |
 
 **Verification:** with `ft_mode="none"`, the tracker output is bit-identical to the original `STARK_ST` over 150
 frames (same checkpoint). STARK-S also gives the same results as the earlier code.
 
 ## 12. License and citation
 
-The STARK code is distributed under the MIT license (`LICENSE`). If you use STARK, please cite the original paper:
+STARK (ICCV2021):
 
 ```bibtex
 @inproceedings{yan2021learning,

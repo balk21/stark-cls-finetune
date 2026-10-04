@@ -115,7 +115,7 @@ stark-cls-finetune/
 │   ├── runner.py                 VOT workspace hazırlığı + `vot evaluate` + sonuç toplama
 │   ├── vot_entry.py              VOT-toolkit'in her dizi için başlattığı tracker süreci
 │   ├── tracker_factory.py        Parametrelerden tracker nesnesi
-│   ├── evaluation.py             COCO AP, P/R/F1, legacy COCO
+│   ├── evaluation.py             COCO mAP/AP50/AP75, P/R/F1, F-maksimum eşik, legacy COCO
 │   ├── analysis.py               Metrik tabloları + grafik üretimi
 │   ├── plots.py                  Grafikler
 │   ├── compare.py                Deney karşılaştırma
@@ -240,7 +240,7 @@ Verilmeyen parametre varsayılan değerini alır.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `eval_score_thr` | `0.35` | **Sabit** eşik: "tracker hedefi buldu" kararı için skor eşiği. Yalnızca `precision / recall / F1` kolonlarını etkiler; AP'yi ve F-maksimum eşik sonucunu etkilemez. |
+| `eval_score_thr` | `0.35` | **Sabit** eşik: "tracker hedefi buldu" kararı için skor eşiği. Yalnızca `precision / recall / F1` kolonlarını etkiler; mAP / AP50 / AP75'i ve F-maksimum eşik sonucunu etkilemez. |
 | `eval_iou_thr` | `0.5` | Bulunan kutunun doğru sayılması için en düşük IoU (hem sabit eşikte hem F-maksimum aramasında). |
 | `eval_thr_resolution` | `100` | F-maksimum eşik aramasındaki aday eşik sayısı (vot-toolkit varsayılanı: 100). |
 
@@ -279,7 +279,7 @@ Her deney `outputs/<deney adı>/` altına yazılır.
 | `tracker_logs/<dizi>/events.txt` | CSV: `frame, event, conf_score`. `event` = `template_update` veya `ft_update`. |
 | `plots/<dizi>/iou_conf.png` | IoU ve güven skoru – kare numarası. Gri taralı alan: hedef yok. Kırmızı kesikli: template update. Yeşil noktalı: fine-tune update. Siyah kesik-noktalı: sabit eşik (`eval_score_thr`). Mor: F-maksimum eşik. |
 | `plots/<dizi>/finetune_loss.png` | Üstte loss (log ölçek), altta pozitif/negatif örnek olasılıkları. Dikey çizgiler oturum başlangıçları (`init`, `f<kare>`). |
-| `metrics/summary.txt` | Okunabilir özet (ilk satırlar: F-maksimum eşik ve sabit eşik sonuçları) + dizi bazında tablo |
+| `metrics/summary.txt` | Okunabilir özet (ilk satırlar: mAP / AP50 / AP75, ardından F-maksimum eşik ve sabit eşik sonuçları) + dizi bazında tablo |
 | `metrics/metrics.xlsx` | `summary` (kolonlar: `mean over sequences`, `pooled`), `optimal_threshold`, `per_sequence`, `f_curve`, `parameters` sayfaları |
 | `metrics/f_curve.csv` | Her aday eşikte dizi ortalaması `precision`, `recall`, `F` |
 | `metrics/f_curve.png` | Solda P / R / F – eşik (mor: seçilen eşik, siyah: sabit eşik), sağda precision–recall eğrisi |
@@ -294,13 +294,19 @@ Her deney `outputs/<deney adı>/` altına yazılır.
 Değerlendirme **detection** tarzındadır: her kare bir "görüntü", hedef tek nesnedir. Hesap `pycocotools`
 kütüphanesiyle yapılır (`stark_ft/evaluation.py`).
 
-### 7.1 COCO AP / AP50 / AP75 (standart kullanım)
+**Birincil metrikler: mAP, AP50 ve AP75** (§7.1). Her özette, tabloda ve karşılaştırmada ilk sırada yer alırlar.
 
+### 7.1 mAP / AP50 / AP75 (standart COCO kullanımı)
+
+- **mAP**, COCO'nun ana "AP" metriğidir (`COCOeval`'in `stats[0]` değeri): precision, recall seviyeleri ve
+  0.50, 0.55, …, 0.95 IoU eşikleri üzerinden ortalanır. **AP50** ve **AP75** tek bir IoU eşiği (0.50 / 0.75) kullanır.
+- Özetlerde "mean over sequences" dizi değerlerinin ortalamasıdır (eski `coco_eval.py`'deki MEAN satırı gibi);
+  "pooled" tüm dizilerin karelerini tek bir veri seti gibi değerlendirir.
 - İlk kare hariç **tüm** kareler değerlendirmeye girer.
 - Hedefin görünmediği (GT = NaN) kareler, annotation'ı olmayan görüntü olarak eklenir. Bu karelerde verilen
   her tahmin **false positive** sayılır.
-- **Skor eşiği uygulanmaz**: tüm tahminler skorlarıyla verilir. AP, skora göre sıralamanın kalitesini
-  zaten tüm eşikler üzerinden ölçer. Eşik koymak AP'yi hiçbir zaman artıramaz.
+- **Skor eşiği uygulanmaz**: tüm tahminler skorlarıyla verilir. mAP, skora göre sıralamanın kalitesini
+  zaten tüm eşikler üzerinden ölçer. Eşik koymak mAP / AP50 / AP75'i hiçbir zaman artıramaz.
 - Koordinatlar float olarak kullanılır.
 
 ### 7.2 Eşikte "buldu / bulmadı" metrikleri
@@ -348,7 +354,7 @@ aynıdır; seçilen eşik kaba kuvvetle bulunanla aynıdır (50 dizide test edil
 ### 7.4 Diğer
 
 - `mean_iou_visible`: hedefin görünür olduğu karelerdeki ortalama IoU (eşik yok).
-- `legacy_AP / legacy_AP50 / legacy_AP75`: eski `testler/detailed_analysis/coco_eval.py` ile **birebir aynı**
+- `legacy_mAP / legacy_AP50 / legacy_AP75`: eski `testler/detailed_analysis/coco_eval.py` ile **birebir aynı**
   hesap (hedefsiz kareler dışarıda, skoru eşiğin altındaki tahminler atılır, koordinatlar tam sayıya yuvarlanır).
   Yalnızca eski sonuçlarla karşılaştırma içindir; hedefsiz karelerdeki yanlış tespitleri cezalandırmaz.
   5 dizide eski betikle aynı sonucu verdiği doğrulanmıştır.
@@ -411,9 +417,9 @@ kullanır; ayrıca Ampere ve sonrası GPU'larda (RTX 3000/4000, A100, ...) PyTor
 ile hesaplarken T4 (Colab) gibi eski GPU'lar tam FP32 hesaplar. Tracking her kareyi bir sonrakine aktardığı için çok
 küçük sayısal farklar büyüyebilir.
 
-Örnek (`bull`, online, pos, 15+15 adım, lr 1e-5, interval 100; legacy AP):
+Örnek (`bull`, online, pos, 15+15 adım, lr 1e-5, interval 100; legacy mAP):
 
-| Koşu | legacy AP |
+| Koşu | legacy mAP |
 |---|---|
 | RTX 3060 (TF32 açık, varsayılan), 8 seed | 0.521 ± 0.001 |
 | RTX 3060, TF32 kapalı (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
@@ -436,7 +442,7 @@ Bu depo, eski çalışma dizinindeki (`Stark/`) kodun düzenlenmiş halidir. Esk
 | 2 | Negatif bölge GT'den `2·max(w,h)` kaydırılıyordu; arama kırpımının yarı kenarı `2.5·sqrt(w·h)` olduğundan en-boy oranı ≈ 1.56'dan küçük hedeflerde **negatif kırpım hedefi içeriyordu**; kenara kırpma (clamp) bunu kötüleştiriyordu. | Kaydırma kırpım boyutuna göre hesaplanır; hedefin kırpımın tamamen dışında kaldığı 20.000 rastgele durumda test edilmiştir. |
 | 3 | `lib/test/evaluation/tracker.py` test dizisinin tüm GT'sini tracker'a veriyordu (negatif için gelecekteki görünmez kareler seçiliyordu): **test etiketi sızıntısı**. | Kaldırıldı. Tracker yalnızca ilk kare kutusunu görür. |
 | 4 | Seed sabit değildi; jitter her koşuda farklıydı. | `seed` parametresi; aynı seed ile sonuçlar birebir aynı (doğrulandı). |
-| 5 | `coco_eval.py` hedefsiz kareleri dışarıda bırakıyor ve skor eşiğini AP'den önce uyguluyordu. | Standart COCO kullanımı + eşikte P/R/F1; eski hesap `legacy_*` olarak korunur. |
+| 5 | `coco_eval.py` hedefsiz kareleri dışarıda bırakıyor ve skor eşiğini mAP'den önce uyguluyordu. | Standart COCO kullanımı + eşikte P/R/F1; eski hesap `legacy_*` olarak korunur. |
 | 6 | `Preprocessor` görüntüyü `tolist()` ile tensöre çeviriyordu (çok yavaş). | Orijinal STARK hali (`torch.tensor(ndarray)`); `vot1`'de sorunsuz çalışıyor. |
 | 7 | `vot evaluate` VOT-LT2020 stack'indeki `redetection` deneyini de koşuyordu (~2× süre). | Varsayılan olarak yalnızca `longterm`; `run_redetection=True` ile açılabilir. |
 | 8 | Yollar geliştirme makinesine özel mutlak yollar olarak sabitti; Vast.ai kurulum betiği dizileri yanlış workspace'e taşıyordu. | Sabit yol yok; her deney kendi VOT workspace'ini oluşturur. |
