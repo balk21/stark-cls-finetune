@@ -42,8 +42,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = REPO_ROOT / "environment" / "vot1_environment.yml"
 DRIVE_ROOT = "/content/drive/MyDrive/LOKAP"  # the notebooks pass their DRIVE_ROOT (first cell)
-OLD_DRIVE_ROOT = "/content/drive/MyDrive/stark-cls-finetune"  # default of earlier versions
-DRIVE_FOLDERS = ("cache", "checkpoints", "outputs", "train_archives", "training")
 LOCAL_ROOT = "/content"
 MICROMAMBA_URL = "https://micro.mamba.pm/api/micromamba/linux-64/latest"
 DEFAULT_CHECKPOINTS = (("stark_st", "baseline_R101"),)
@@ -225,23 +223,8 @@ def write_paths(**paths):
     return path
 
 
-def _check_old_drive_root(drive_root: Path):
-    """Stops if the Drive folder is new but the folder of an earlier version still has data, so that the environment
-    and the dataset are not created / downloaded again by mistake."""
-    old = Path(OLD_DRIVE_ROOT)
-    if not old.is_dir() or old.resolve() == drive_root.resolve() or (drive_root / "cache").exists():
-        return
-    found = [d for d in DRIVE_FOLDERS if (old / d).exists()]
-    if found:
-        raise RuntimeError(
-            f"Earlier data was found in {old} ({', '.join(found)}), but the Drive folder is now {drive_root}.\n"
-            f"In Google Drive, move these folders from '{old.name}' into '{drive_root.name}' (moving is instant), then "
-            "run this cell again. To start from scratch in the new folder instead, call "
-            "colab_bootstrap(..., ignore_old_drive_root=True).")
-
-
 def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoints=DEFAULT_CHECKPOINTS,
-              download_dataset=True, rebuild_env=False, vot_dataset=True, ignore_old_drive_root=False) -> dict:
+              download_dataset=True, rebuild_env=False, vot_dataset=True) -> dict:
     """Prepares the current Colab session. Safe to call in every notebook; only missing steps are executed.
     vot_dataset=False skips the VOT-LT2020 dataset (not needed for training)."""
     t0 = time.time()
@@ -254,8 +237,6 @@ def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoi
         from google.colab import drive  # noqa: import only available on Colab
         drive.mount("/content/drive")
     drive_root, local_root = Path(drive_root), Path(local_root)
-    if not ignore_old_drive_root:
-        _check_old_drive_root(drive_root)
     _log(f"Google Drive folder: {drive_root}")
     (drive_root / "outputs").mkdir(parents=True, exist_ok=True)
 
