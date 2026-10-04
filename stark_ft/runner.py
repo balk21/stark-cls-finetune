@@ -121,6 +121,15 @@ def _collect_results(out_dir: Path, paths: Paths, sequences):
     return status
 
 
+def _print_tracker_errors(log_dir: Path, since: float, max_logs=2, max_lines=40):
+    """Prints the end of the tracker error logs written by vot-toolkit during this run."""
+    logs = sorted((p for p in log_dir.glob("*.log") if p.stat().st_mtime >= since), key=lambda p: p.stat().st_mtime)
+    for log in logs[-max_logs:]:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        print(f"\n----- tracker output: {log.name} (last {min(len(lines), max_lines)} lines) -----")
+        print("\n".join(lines[-max_lines:]))
+
+
 def _stream_process(cmd, log_path: Path, env, verbose=True):
     with open(log_path, "ab") as log:
         log.write(f"\n===== {datetime.datetime.now().isoformat()} :: {' '.join(cmd)}\n".encode())
@@ -204,6 +213,7 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
     # --persist: if a sequence fails, the remaining sequences still run (failures are listed in run_status.json)
     cmd = [sys.executable, "-m", "vot", "evaluate", "--persist", "--workspace", str(out_dir / "vot_workspace"),
            TRACKER_ID]
+    started = datetime.datetime.now().timestamp()
     returncode = _stream_process(cmd, out_dir / "run.log", env, verbose=verbose)
 
     status = _collect_results(out_dir, paths, sequences)
@@ -219,6 +229,7 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
         print(f"WARNING - sequences with missing lines: {status['incomplete']}")
         print(f"Tracker error output: {out_dir / 'vot_workspace' / 'logs'}  (general output: run.log)")
         print("Running the same experiment again skips completed sequences and retries the missing ones.")
+        _print_tracker_errors(out_dir / "vot_workspace" / "logs", since=started)
 
     if analyze and status["complete"]:
         from stark_ft.analysis import analyze_experiment
