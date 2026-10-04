@@ -12,7 +12,7 @@ runs on a Vast.ai server and on a personal computer.
 ---
 
 ## Contents
-1. [Quick start (Vast.ai)](#1-quick-start-vastai)
+1. [Quick start (Vast.ai / Google Colab)](#1-quick-start)
 2. [On your own computer](#2-on-your-own-computer)
 3. [Folder layout](#3-folder-layout)
 4. [Method](#4-method)
@@ -27,7 +27,9 @@ runs on a Vast.ai server and on a personal computer.
 
 ---
 
-## 1. Quick start (Vast.ai)
+## 1. Quick start
+
+### 1.1 Vast.ai
 
 **Requirements**
 
@@ -53,6 +55,30 @@ runs on a Vast.ai server and on a personal computer.
 > **Notebook kernel:** any Python 3 kernel works. The notebooks do the actual work in the background with the
 > Python of the `vot1` environment (`notebooks/nbhelper.py`). You do not need to change the kernel.
 
+### 1.2 Google Colab
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/00_setup_colab.ipynb)
+
+1. Open `notebooks/00_setup_colab.ipynb` in Colab with the badge above and choose
+   *Runtime → Change runtime type → GPU* (T4, L4 or A100).
+2. Run the cells. Google Drive is mounted, and the **same `vot1` environment** as on Vast.ai is created with
+   micromamba (same package versions; the tracker output is bit-identical to a local `vot1` run).
+3. Then open `01_run_experiment.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/01_run_experiment.ipynb) and `02_compare.ipynb`
+   [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) in Colab.
+
+Colab gives a fresh machine in every session, so everything that is slow to prepare is cached on Google Drive in
+`MyDrive/stark-cls-finetune/` and restored by the first cell of every notebook (`notebooks/colab_setup.py`):
+
+| | First session (once) | Later sessions |
+|---|---|---|
+| `vot1` environment | created (~5–10 min), cached on Drive (`cache/vot1_env_<hash>.tar`, 7.8 GB) | restored (~1–3 min) |
+| Checkpoint | downloaded to Drive (`checkpoints/`) | copied (seconds) |
+| VOT-LT2020 dataset | downloaded (20–60 min), cached on Drive (`cache/votlt2020_sequences.tar`, 17 GB) | restored (a few min) |
+| Outputs | written to Drive (`outputs/`) | kept; interrupted runs resume |
+
+**Google Drive space needed:** ≈ 26 GB + experiment outputs. Your own checkpoints can be uploaded to
+`MyDrive/stark-cls-finetune/checkpoints/<stark_st2|stark_s>/<model_config>/`.
+
 ## 2. On your own computer
 
 The same notebooks are used. If the checkpoints or the dataset already exist elsewhere, instead of downloading them,
@@ -76,10 +102,12 @@ experiment's own `vot_workspace/` folder, with absolute paths to the sequences.
 ```
 stark-cls-finetune/
 ├── notebooks/
-│   ├── 00_setup.ipynb            Setup (environment, checkpoint, dataset, smoke test)
+│   ├── 00_setup.ipynb            Setup on a conda machine (environment, checkpoint, dataset, smoke test)
+│   ├── 00_setup_colab.ipynb      Setup on Google Colab (environment / dataset cached on Google Drive)
 │   ├── 01_run_experiment.ipynb   Parameters → run → results
 │   ├── 02_compare.ipynb          Comparing experiments
-│   └── nbhelper.py               Notebook helpers (standard library only)
+│   ├── nbhelper.py               Notebook helpers (standard library only)
+│   └── colab_setup.py            Google Colab session bootstrap (standard library only)
 ├── stark_ft/                     Experiment framework
 │   ├── config.py                 ExperimentConfig: ALL parameters and their validation
 │   ├── paths.py                  Path resolution
@@ -357,6 +385,8 @@ python -m tests.test_sampling                              # tests of the negati
 | Missing sequences, e.g. `Completed sequences: 47/50` | A failing sequence is skipped and the others keep running. The tracker's error output is in `outputs/<experiment>/vot_workspace/logs/`. Running the same experiment again skips completed sequences and retries the missing ones. |
 | `no kernel image is available` / sm_120 warning | The GPU is not supported by the PyTorch in the environment (RTX 5000 series). Use an RTX 3000/4000 series GPU. |
 | "A newer version of the VOT toolkit is available" | Ignore it; the repository is tested with vot-toolkit **0.5.3**. Do not upgrade. |
+| Colab: `WARNING: no GPU in this session` | *Runtime → Change runtime type → GPU*, then run the first cell again. |
+| Colab: caching to Drive fails | Not enough Google Drive space (≈ 26 GB needed). Free space and run the first cell again; completed steps are not repeated. |
 
 ## 10. Known limitations and open issues
 

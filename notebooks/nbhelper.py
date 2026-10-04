@@ -3,7 +3,8 @@ Notebook helpers — use ONLY the standard library + IPython.
 
 They work in whatever Python kernel the notebook is opened with (including the default Jupyter of
 Vast.ai / Colab): the actual work is done in a subprocess, `python -m stark_ft ...`, using the Python
-of the `vot1` conda environment.
+of the `vot1` conda environment. On Google Colab, `colab_bootstrap()` (see colab_setup.py) prepares
+that environment first.
 """
 import json
 import os
@@ -20,9 +21,12 @@ OUTPUT_DIR_MARKER = "OUTPUT_DIR="  # printed by `python -m stark_ft run`
 _PATHS_CACHE = {}
 
 _CANDIDATE_PREFIXES = [
-    "~/anaconda3", "~/miniconda3", "~/miniforge3", "~/mambaforge",
+    "~/anaconda3", "~/miniconda3", "~/miniforge3", "~/mambaforge", "~/micromamba",
     "/opt/conda", "/opt/miniconda3", "/opt/miniforge3", "/usr/local/miniconda3", "/root/miniconda3",
+    "/content/micromamba",  # Google Colab (colab_setup.py)
 ]
+if os.environ.get("MAMBA_ROOT_PREFIX"):
+    _CANDIDATE_PREFIXES.insert(0, os.environ["MAMBA_ROOT_PREFIX"])
 
 
 # ------------------------------------------------------------------ locating the environment
@@ -57,6 +61,18 @@ def find_env_python(env_name=ENV_NAME):
         if p.is_file():
             return str(p)
     return None
+
+
+def in_colab() -> bool:
+    return "google.colab" in sys.modules
+
+
+def colab_bootstrap(**kwargs) -> dict:
+    """Prepares a Google Colab session (environment, checkpoints, dataset, paths). See colab_setup.bootstrap."""
+    from colab_setup import bootstrap
+    info = bootstrap(**kwargs)
+    _PATHS_CACHE.clear()
+    return info
 
 
 def python():

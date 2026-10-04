@@ -12,7 +12,7 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
 ---
 
 ## İçindekiler
-1. [Hızlı başlangıç (Vast.ai)](#1-hızlı-başlangıç-vastai)
+1. [Hızlı başlangıç (Vast.ai / Google Colab)](#1-hızlı-başlangıç)
 2. [Kendi bilgisayarınızda](#2-kendi-bilgisayarınızda)
 3. [Klasör yapısı](#3-klasör-yapısı)
 4. [Yöntem](#4-yöntem)
@@ -27,7 +27,9 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
 
 ---
 
-## 1. Hızlı başlangıç (Vast.ai)
+## 1. Hızlı başlangıç
+
+### 1.1 Vast.ai
 
 **Gereksinimler**
 
@@ -53,6 +55,31 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
 > **Notebook çekirdeği:** Herhangi bir Python 3 çekirdeği yeterlidir. Notebook'lar asıl işi arka planda
 > `vot1` ortamının Python'u ile yaptırır (`notebooks/nbhelper.py`). Çekirdek değiştirmeniz gerekmez.
 
+### 1.2 Google Colab
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/00_setup_colab.ipynb)
+
+1. Yukarıdaki rozetle `notebooks/00_setup_colab.ipynb` dosyasını Colab'de açın ve
+   *Runtime → Change runtime type → GPU* (T4, L4 veya A100) seçin.
+2. Hücreleri çalıştırın. Google Drive bağlanır ve Vast.ai'daki ile **aynı `vot1` ortamı** micromamba ile kurulur
+   (aynı paket sürümleri; tracker çıktısı yerel `vot1` koşusuyla bit düzeyinde aynıdır).
+3. Ardından `01_run_experiment.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/01_run_experiment.ipynb) ve `02_compare.ipynb`
+   [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) notebook'larını Colab'de açın.
+
+Colab her oturumda yeni bir makine verir. Bu yüzden hazırlaması uzun süren her şey Google Drive'da
+`MyDrive/stark-cls-finetune/` altında saklanır ve her notebook'un ilk hücresi tarafından geri yüklenir
+(`notebooks/colab_setup.py`):
+
+| | İlk oturum (bir kez) | Sonraki oturumlar |
+|---|---|---|
+| `vot1` ortamı | kurulur (~5–10 dk), Drive'a arşivlenir (`cache/vot1_env_<hash>.tar`, 7.8 GB) | geri yüklenir (~1–3 dk) |
+| Checkpoint | Drive'a indirilir (`checkpoints/`) | kopyalanır (saniyeler) |
+| VOT-LT2020 veri seti | indirilir (20–60 dk), Drive'a arşivlenir (`cache/votlt2020_sequences.tar`, 17 GB) | geri yüklenir (birkaç dk) |
+| Çıktılar | Drive'a yazılır (`outputs/`) | korunur; yarıda kalan koşular devam ettirilebilir |
+
+**Gereken Google Drive alanı:** ≈ 26 GB + deney çıktıları. Kendi checkpoint'lerinizi
+`MyDrive/stark-cls-finetune/checkpoints/<stark_st2|stark_s>/<model_config>/` altına yükleyebilirsiniz.
+
 ## 2. Kendi bilgisayarınızda
 
 Aynı notebook'lar kullanılır. Checkpoint veya veri seti zaten başka bir yerdeyse indirmek yerine
@@ -75,10 +102,12 @@ Veri seti klasörüne **hiçbir dosya yazılmaz**. VOT-toolkit'in ihtiyaç duydu
 ```
 stark-cls-finetune/
 ├── notebooks/
-│   ├── 00_setup.ipynb            Kurulum (ortam, checkpoint, veri seti, duman testi)
+│   ├── 00_setup.ipynb            Conda'lı makinede kurulum (ortam, checkpoint, veri seti, duman testi)
+│   ├── 00_setup_colab.ipynb      Google Colab'de kurulum (ortam / veri seti Google Drive'da önbelleklenir)
 │   ├── 01_run_experiment.ipynb   Parametreler → çalıştırma → sonuçlar
 │   ├── 02_compare.ipynb          Deney karşılaştırma
-│   └── nbhelper.py               Notebook yardımcıları (yalnızca standart kütüphane)
+│   ├── nbhelper.py               Notebook yardımcıları (yalnızca standart kütüphane)
+│   └── colab_setup.py            Google Colab oturum hazırlığı (yalnızca standart kütüphane)
 ├── stark_ft/                     Deney altyapısı
 │   ├── config.py                 ExperimentConfig: TÜM parametreler ve doğrulama
 │   ├── paths.py                  Yol çözümleme
@@ -356,6 +385,8 @@ python -m tests.test_sampling                              # negatif örnek geom
 | `Completed sequences: 47/50` gibi eksik | Hata veren dizi atlanır, diğerleri koşmaya devam eder. Tracker'ın hata çıktısı `outputs/<deney>/vot_workspace/logs/` içindedir. Aynı deneyi tekrar çalıştırmak tamamlananları atlar, eksikleri yeniden dener. |
 | `no kernel image is available` / sm_120 uyarısı | GPU, ortamdaki PyTorch tarafından desteklenmiyor (RTX 5000 serisi). RTX 3000/4000 serisi kullanın. |
 | "A newer version of the VOT toolkit is available" | Görmezden gelin; depo vot-toolkit **0.5.3** ile test edilmiştir. Güncellemeyin. |
+| Colab: `WARNING: no GPU in this session` | *Runtime → Change runtime type → GPU* seçip ilk hücreyi tekrar çalıştırın. |
+| Colab: Drive'a arşivleme başarısız | Google Drive'da yeterli yer yok (≈ 26 GB gerekir). Yer açıp ilk hücreyi tekrar çalıştırın; tamamlanan adımlar tekrarlanmaz. |
 
 ## 10. Bilinen sınırlamalar ve açık konular
 
