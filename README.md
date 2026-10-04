@@ -73,7 +73,8 @@ runs on a Vast.ai server, on Google Colab and on a personal computer.
    [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) in Colab.
 
 Colab gives a fresh machine in every session, so everything that is slow to prepare is cached on Google Drive in
-`MyDrive/stark-cls-finetune/` and restored by the first cell of every notebook (`notebooks/colab_setup.py`):
+`MyDrive/LOKAP/` and restored by the first cell of every notebook (`notebooks/colab_setup.py`). The folder is set by
+`DRIVE_ROOT` at the top of the first cell; use the same value in every notebook.
 
 | | First session (once) | Later sessions |
 |---|---|---|
@@ -83,7 +84,7 @@ Colab gives a fresh machine in every session, so everything that is slow to prep
 | Outputs | written to Drive (`outputs/`) | kept; interrupted runs resume |
 
 **Google Drive space needed:** ≈ 26 GB + experiment outputs. Your own checkpoints can be uploaded to
-`MyDrive/stark-cls-finetune/checkpoints/<stark_st2|stark_s>/<model_config>/`.
+`MyDrive/LOKAP/checkpoints/<stark_st2|stark_s>/<model_config>/`.
 
 **Training on Colab:** open `03_train.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb)
 directly; it does not need the VOT dataset (see [§8](#8-training-stark-st-base-training)).
@@ -440,7 +441,7 @@ from `GOT10K_vottrain` (as in STARK). It needs the GOT-10k folder even when trai
 ├── coco/images/train2017/*.jpg
 ├── lasot/ ...                      (manual)
 ├── trackingnet/TRAIN_0 ... TRAIN_11 (manual)
-└── _archives/{coco,got10k}/        downloaded archives (on Colab: MyDrive/stark-cls-finetune/train_archives/)
+└── _archives/{coco,got10k}/        downloaded archives (on Colab: MyDrive/LOKAP/train_archives/)
 ```
 
 **GOT-10k** can only be downloaded after a free registration at
@@ -450,7 +451,7 @@ The archives can be given in three ways:
 
 1. **On Colab, for a file on Google Drive (recommended):** open the link in the browser with the Google account you
    use in Colab, choose *Add shortcut to Drive* and put the shortcut into
-   `MyDrive/stark-cls-finetune/train_archives/got10k/`; leave `GOT10K_URLS` empty. Nothing is downloaded or copied:
+   `MyDrive/LOKAP/train_archives/got10k/`; leave `GOT10K_URLS` empty. Nothing is downloaded or copied:
    the archive is read from Drive and extracted to the local disk in every new session. If reading it fails because
    the file's download quota is exceeded, make a copy of it into the same folder instead (right-click the shortcut →
    *Make a copy*; needs 70.7 GB of Drive space).
@@ -504,7 +505,7 @@ much is needed.
 ### 8.5 Run folder, resuming, using the result
 
 Every run is written to `<train_outputs>/<run name>/` (default `outputs/training/`; on Colab
-`MyDrive/stark-cls-finetune/training/`):
+`MyDrive/LOKAP/training/`):
 
 | File | Content |
 |---|---|

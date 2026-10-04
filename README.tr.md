@@ -73,8 +73,9 @@ Vast.ai sunucusunda, Google Colab'de ve kişisel bilgisayarda çalışır.
    [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/02_compare.ipynb) notebook'larını Colab'de açın.
 
 Colab her oturumda yeni bir makine verir. Bu yüzden hazırlaması uzun süren her şey Google Drive'da
-`MyDrive/stark-cls-finetune/` altında saklanır ve her notebook'un ilk hücresi tarafından geri yüklenir
-(`notebooks/colab_setup.py`):
+`MyDrive/LOKAP/` altında saklanır ve her notebook'un ilk hücresi tarafından geri yüklenir
+(`notebooks/colab_setup.py`). Klasör, ilk hücrenin başındaki `DRIVE_ROOT` ile belirlenir; her notebook'ta aynı değeri
+kullanın.
 
 | | İlk oturum (bir kez) | Sonraki oturumlar |
 |---|---|---|
@@ -84,7 +85,7 @@ Colab her oturumda yeni bir makine verir. Bu yüzden hazırlaması uzun süren h
 | Çıktılar | Drive'a yazılır (`outputs/`) | korunur; yarıda kalan koşular devam ettirilebilir |
 
 **Gereken Google Drive alanı:** ≈ 26 GB + deney çıktıları. Kendi checkpoint'lerinizi
-`MyDrive/stark-cls-finetune/checkpoints/<stark_st2|stark_s>/<model_config>/` altına yükleyebilirsiniz.
+`MyDrive/LOKAP/checkpoints/<stark_st2|stark_s>/<model_config>/` altına yükleyebilirsiniz.
 
 **Colab'de eğitim:** `03_train.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb)
 notebook'unu doğrudan açın; VOT veri setine ihtiyaç duymaz (bkz. [§8](#8-stark-st-eğitimi-base-training)).
@@ -442,7 +443,7 @@ gerekir; doğrulamasız eğitim için `val_datasets=[]` verin.
 ├── coco/images/train2017/*.jpg
 ├── lasot/ ...                      (elle)
 ├── trackingnet/TRAIN_0 ... TRAIN_11 (elle)
-└── _archives/{coco,got10k}/        indirilen arşivler (Colab'de: MyDrive/stark-cls-finetune/train_archives/)
+└── _archives/{coco,got10k}/        indirilen arşivler (Colab'de: MyDrive/LOKAP/train_archives/)
 ```
 
 **GOT-10k** ancak [got-10k.aitestunion.com/downloads](http://got-10k.aitestunion.com/downloads) adresinde ücretsiz
@@ -450,7 +451,7 @@ kayıttan sonra indirilebilir; indirme linkleri e-postayla gelir. Linkler Google
 `full_data.zip` (70.7 GB; içinde `train/`, `val/` ve `test/` vardır). Arşivler üç şekilde verilebilir:
 
 1. **Colab'de, Google Drive'daki bir dosya için (önerilen):** linki tarayıcıda Colab'de kullandığınız Google hesabıyla
-   açın, *Drive'a kısayol ekle* seçeneğiyle kısayolu `MyDrive/stark-cls-finetune/train_archives/got10k/` klasörüne
+   açın, *Drive'a kısayol ekle* seçeneğiyle kısayolu `MyDrive/LOKAP/train_archives/got10k/` klasörüne
    koyun ve `GOT10K_URLS` listesini boş bırakın. Hiçbir şey indirilmez veya kopyalanmaz: arşiv her yeni oturumda
    Drive'dan okunur ve yerel diske açılır. Dosyanın indirme kotası dolduğu için okuma başarısız olursa, bunun yerine
    aynı klasöre bir kopyasını oluşturun (kısayola sağ tık → *Kopyasını oluştur*; Drive'da 70.7 GB yer gerekir).
@@ -505,7 +506,7 @@ Disk yetmezse hazırlık, ne kadar alan gerektiğini söyleyen bir mesajla durur
 ### 8.5 Koşu klasörü, devam etme, sonucu kullanma
 
 Her koşu `<train_outputs>/<koşu adı>/` klasörüne yazılır (varsayılan `outputs/training/`; Colab'de
-`MyDrive/stark-cls-finetune/training/`):
+`MyDrive/LOKAP/training/`):
 
 | Dosya | İçerik |
 |---|---|
