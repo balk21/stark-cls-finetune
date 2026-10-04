@@ -261,6 +261,12 @@ Yalnızca bunları değiştirmek, deneyi "farklı parametreli" yapmaz (devam etm
   (`eval_*` parametreleri bu karşılaştırmaya dahil değildir.)
 - Aynı `name` + **farklı** parametreler hata verir ve eski sonuçlar korunur. Üzerine yazmak için
   `nb.run(PARAMS, overwrite=True)` (CLI: `--overwrite`).
+- Deney başlatıldıktan sonra **tracking kodu değiştiyse** (örneğin bir `git pull` sonrası) devam etme de reddedilir:
+  `lib/`, `model_configs/` ve tracker giriş noktasının bir özeti `experiment.json`'a yazılır; böylece iki kod
+  sürümünün sonuçları asla karışmaz. Temiz bir koşu için `overwrite=True` kullanın.
+- Bu yüzden `vot evaluate` **`-f` olmadan** çağrılır: her deneyin kendi workspace'i olduğu için başka deneylerden kalma
+  sonuç yoktur, tamamlanan dizilerin atlanması da devam etmeyi mümkün kılar. `vot analysis` (ve onun `--nocache`
+  seçeneği) kullanılmaz; metrikler her seferinde ham sonuçlardan yeniden hesaplanır.
 
 ## 6. Çıktılar ve dosya formatları
 

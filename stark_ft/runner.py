@@ -12,6 +12,7 @@ Output folder layout (outputs/<experiment name>/):
     metrics/              metrics.xlsx, metrics.json, summary.txt, f_curve.csv, f_curve.png
 """
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -26,6 +27,9 @@ from stark_ft.paths import REPO_ROOT, Paths, get_paths, list_sequences
 
 TRACKER_ID = "stark_clean"
 VOT_RESULTS_SUBDIR = Path("results") / TRACKER_ID / "longterm"
+# Code that determines the tracker output. If it changes, an experiment must not be resumed: completed sequences
+# (skipped by vot-toolkit, which is why `vot evaluate` runs without -f) would come from the old code.
+TRACKING_CODE = ("lib", "model_configs", "stark_ft/vot_entry.py", "stark_ft/tracker_factory.py", "stark_ft/vot_trax.py")
 
 
 class ExperimentExistsError(RuntimeError):
@@ -38,6 +42,19 @@ def _git_commit():
                                        stderr=subprocess.DEVNULL, text=True).strip()
     except Exception:
         return None
+
+
+def tracking_code_hash() -> str:
+    """Hash of the code that determines the tracker output (independent of git and of documentation changes)."""
+    h = hashlib.sha1()
+    for entry in TRACKING_CODE:
+        root = REPO_ROOT / entry
+        files = sorted(root.rglob("*")) if root.is_dir() else [root]
+        for f in files:
+            if f.is_file() and f.suffix in (".py", ".yaml"):
+                h.update(str(f.relative_to(REPO_ROOT)).encode())
+                h.update(f.read_bytes().replace(b"\r\n", b"\n"))
+    return h.hexdigest()[:12]
 
 
 def resolve_sequences(cfg: ExperimentConfig, paths: Paths):
@@ -163,8 +180,10 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
 
     out_dir = paths.outputs / cfg.experiment_name
     meta_path = out_dir / "experiment.json"
+    code_hash = tracking_code_hash()
     if out_dir.exists():
         same = False
+        old_code = None
         if meta_path.is_file():
             with open(meta_path) as f:
                 old = json.load(f)
@@ -173,6 +192,7 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
             except ValueError:
                 old_cfg = None
             same = old_cfg == cfg.tracking_dict() and old.get("checkpoint") == str(checkpoint)
+            old_code = old.get("code_hash")
         if overwrite:
             if paths.outputs.resolve() not in out_dir.resolve().parents:
                 raise RuntimeError(f"Safety check: {out_dir} is not inside the outputs folder; not deleted")
@@ -181,6 +201,11 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
             raise ExperimentExistsError(
                 f"'{out_dir}' already exists with different parameters.\n"
                 "Use a different `name`, or overwrite=True to delete the old results.")
+        elif old_code is not None and old_code != code_hash:
+            raise ExperimentExistsError(
+                f"'{out_dir}' was started with a different version of the tracking code "
+                f"({old_code} -> {code_hash}).\nResuming would mix results of two code versions. "
+                "Use overwrite=True for a fresh run, or a different `name`.")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     meta = {
@@ -192,6 +217,7 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
         "sequences": sequences,
         "created": datetime.datetime.now().isoformat(timespec="seconds"),
         "git_commit": _git_commit(),
+        "code_hash": code_hash,
         "python": sys.executable,
     }
     with open(meta_path, "w") as f:

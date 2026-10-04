@@ -260,6 +260,12 @@ Changing only these does not make the experiment "different" (it does not affect
   To continue an interrupted run, simply run the cell again. (The `eval_*` parameters are not part of this check.)
 - The same `name` + **different** parameters raises an error and the old results are kept. To overwrite, use
   `nb.run(PARAMS, overwrite=True)` (CLI: `--overwrite`).
+- Resuming is also refused if the **tracking code changed** since the experiment was started (e.g. after a
+  `git pull`): a hash of `lib/`, `model_configs/` and the tracker entry point is stored in `experiment.json`, so results
+  of two code versions are never mixed. Use `overwrite=True` for a fresh run.
+- This is why `vot evaluate` is called **without `-f`**: every experiment has its own workspace, so there are no stale
+  results from other experiments, and skipping completed sequences is what makes resuming possible. `vot analysis`
+  (and its `--nocache` option) is not used; the metrics are always recomputed from the raw results.
 
 ## 6. Outputs and file formats
 
