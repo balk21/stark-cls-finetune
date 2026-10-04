@@ -435,21 +435,20 @@ Bu depo, eski çalışma dizinindeki (`Stark/`) kodun düzenlenmiş halidir. Esk
 | 1 | `STARK_FT_MODE=all` tanımsızdı; tracker yalnızca `online`'ı tanıdığı için "online" diye adlandırılan deneylerde **online fine-tune hiç çalışmıyordu** (`run_all_finetune.py`, `run_bull_posonly_update.py`). | Modlar `none / init / online`; geçersiz değer hata verir. |
 | 2 | Negatif bölge GT'den `2·max(w,h)` kaydırılıyordu; arama kırpımının yarı kenarı `2.5·sqrt(w·h)` olduğundan en-boy oranı ≈ 1.56'dan küçük hedeflerde **negatif kırpım hedefi içeriyordu**; kenara kırpma (clamp) bunu kötüleştiriyordu. | Kaydırma kırpım boyutuna göre hesaplanır; hedefin kırpımın tamamen dışında kaldığı 20.000 rastgele durumda test edilmiştir. |
 | 3 | `lib/test/evaluation/tracker.py` test dizisinin tüm GT'sini tracker'a veriyordu (negatif için gelecekteki görünmez kareler seçiliyordu): **test etiketi sızıntısı**. | Kaldırıldı. Tracker yalnızca ilk kare kutusunu görür. |
-| 4 | Yerel `lib/test/parameter/stark_st.py`, `STARKSTcoco_ep0050.pth.tar` varsa **sessizce onu** yüklüyordu; "baseline" sonuçları COCO checkpoint'i ile alınmış olabilir. | Checkpoint yalnızca `checkpoint` parametresiyle seçilir ve `experiment.json`'a yazılır. |
-| 5 | Seed sabit değildi; jitter her koşuda farklıydı. | `seed` parametresi; aynı seed ile sonuçlar birebir aynı (doğrulandı). |
-| 6 | `coco_eval.py` hedefsiz kareleri dışarıda bırakıyor ve skor eşiğini AP'den önce uyguluyordu. | Standart COCO kullanımı + eşikte P/R/F1; eski hesap `legacy_*` olarak korunur. |
-| 7 | `Preprocessor` görüntüyü `tolist()` ile tensöre çeviriyordu (çok yavaş). | Orijinal STARK hali (`torch.tensor(ndarray)`); `vot1`'de sorunsuz çalışıyor. |
-| 8 | `vot evaluate` VOT-LT2020 stack'indeki `redetection` deneyini de koşuyordu (~2× süre). | Varsayılan olarak yalnızca `longterm`; `run_redetection=True` ile açılabilir. |
-| 9 | Yollar geliştirme makinesine özel mutlak yollar olarak sabitti; Vast.ai kurulum betiği dizileri yanlış workspace'e taşıyordu. | Sabit yol yok; her deney kendi VOT workspace'ini oluşturur. |
-| 10 | Model her başlatmada ImageNet ResNet ağırlıklarını indiriyordu (sonra checkpoint ile eziliyordu). | İndirme atlanır. |
-| 11 | Her ayar kombinasyonu için ayrı bir `lib/test/vot20/stark_st101_ft_*.py` dosyası (~40 adet) ve onlarca `run_*.py` betiği vardı. | Tek giriş noktası: `ExperimentConfig` + `vot_entry.py`. |
+| 4 | Seed sabit değildi; jitter her koşuda farklıydı. | `seed` parametresi; aynı seed ile sonuçlar birebir aynı (doğrulandı). |
+| 5 | `coco_eval.py` hedefsiz kareleri dışarıda bırakıyor ve skor eşiğini AP'den önce uyguluyordu. | Standart COCO kullanımı + eşikte P/R/F1; eski hesap `legacy_*` olarak korunur. |
+| 6 | `Preprocessor` görüntüyü `tolist()` ile tensöre çeviriyordu (çok yavaş). | Orijinal STARK hali (`torch.tensor(ndarray)`); `vot1`'de sorunsuz çalışıyor. |
+| 7 | `vot evaluate` VOT-LT2020 stack'indeki `redetection` deneyini de koşuyordu (~2× süre). | Varsayılan olarak yalnızca `longterm`; `run_redetection=True` ile açılabilir. |
+| 8 | Yollar geliştirme makinesine özel mutlak yollar olarak sabitti; Vast.ai kurulum betiği dizileri yanlış workspace'e taşıyordu. | Sabit yol yok; her deney kendi VOT workspace'ini oluşturur. |
+| 9 | Model her başlatmada ImageNet ResNet ağırlıklarını indiriyordu (sonra checkpoint ile eziliyordu). | İndirme atlanır. |
+| 10 | Her ayar kombinasyonu için ayrı bir `lib/test/vot20/stark_st101_ft_*.py` dosyası (~40 adet) ve onlarca `run_*.py` betiği vardı. | Tek giriş noktası: `ExperimentConfig` + `vot_entry.py`. |
 
 **Doğrulamalar:** `ft_mode="none"` ile tracker çıktısı eski `STARK_ST` ile 150 karede bit düzeyinde aynıdır
 (aynı checkpoint ile). STARK-S de eski kodla aynı sonucu verir.
 
 ## 12. Lisans ve atıf
 
-STARK kodu MIT lisansı ile dağıtılır (`LICENSE`). STARK'ı kullanıyorsanız orijinal makaleye atıf yapın:
+STARK (ICCV2021):
 
 ```bibtex
 @inproceedings{yan2021learning,
