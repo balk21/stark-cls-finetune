@@ -377,6 +377,7 @@ python -m stark_ft compare <deney1> <deney2> --out comparison.xlsx --plot compar
 python -m stark_ft download-checkpoints --model stark_st --model-config baseline_R101 baseline
 python -m stark_ft download-dataset
 python -m tests.test_sampling                              # negatif örnek geometrisi testleri
+python -m tests.test_config                                # parametre okuma / doğrulama testleri
 ```
 
 `--set` değerleri YAML olarak yorumlanır: `1e-4` → sayı, `true` → bool, `[a, b]` → liste.

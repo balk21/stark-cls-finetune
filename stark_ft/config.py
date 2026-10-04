@@ -181,6 +181,16 @@ class ExperimentConfig:
             raise ValueError(f"Unknown parameter(s): {sorted(unknown)}")
         return cls(**{k: _coerce(k, v, types[k]) for k, v in data.items()})
 
+    @classmethod
+    def from_file(cls, path) -> "ExperimentConfig":
+        path = Path(path)
+        with open(path) as f:
+            data = json.load(f) if path.suffix == ".json" else yaml.safe_load(f)
+        # experiment.json has the structure {"config": {...}, ...}
+        if "config" in data and isinstance(data["config"], dict):
+            data = data["config"]
+        return cls.from_dict(data)
+
 
 def _coerce(name, value, type_):
     """Converts strings to the declared type of a parameter. YAML (1.1) reads e.g. `1e-5` as a string,
@@ -203,13 +213,3 @@ def _coerce(name, value, type_):
     except ValueError:
         raise ValueError(f"Parameter {name}={value!r} cannot be converted to {type_.__name__}") from None
     return value
-
-    @classmethod
-    def from_file(cls, path) -> "ExperimentConfig":
-        path = Path(path)
-        with open(path) as f:
-            data = json.load(f) if path.suffix == ".json" else yaml.safe_load(f)
-        # experiment.json has the structure {"config": {...}, ...}
-        if "config" in data and isinstance(data["config"], dict):
-            data = data["config"]
-        return cls.from_dict(data)
