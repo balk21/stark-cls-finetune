@@ -112,6 +112,61 @@ def test_coco_download_and_extract(tmp):
     assert td.download(f"{base}/train2017.zip", tmp / "dl") == first
 
 
+@_with_small_counts
+def test_got10k_full_data_layout_and_path_sources(tmp):
+    # Layout of the official full_data.zip: train/ (videos + list.txt), val/, test/ - only train/ is extracted
+    src = tmp / "elsewhere" / "full_data.zip"  # e.g. a shortcut on the mounted Google Drive
+    src.parent.mkdir()
+    with zipfile.ZipFile(src, "w") as z:
+        for n in NAMES:
+            z.writestr(f"train/{n}/groundtruth.txt", "1,2,3,4\n")
+            z.writestr(f"train/{n}/00000001.jpg", b"x" * 100)
+        z.writestr("train/list.txt", "\n".join(NAMES))
+        z.writestr("val/GOT-10k_Val_000001/00000001.jpg", b"v" * 5000)
+        z.writestr("test/GOT-10k_Test_000001/00000001.jpg", b"t" * 5000)
+    assert td._uncompressed_size(src) - td._uncompressed_size(src, td.GOT10K_MEMBERS) == 10000  # val + test
+    for no_unzip in (False, True):  # with the unzip program and with the zipfile fallback
+        which = td.shutil.which
+        if no_unzip:
+            td.shutil.which = lambda name: None
+        try:
+            data = tmp / f"data{int(no_unzip)}"
+            train = Path(td.prepare(["got10k"], data, tmp / "archives", [str(src)], delete_archives=True)["got10k"])
+        finally:
+            td.shutil.which = which
+        assert sorted(p.name for p in train.iterdir() if p.is_dir()) == NAMES
+        assert (train / "list.txt").read_text() == "\n".join(NAMES)
+        assert src.is_file()  # archives given by path are never deleted
+    try:
+        td.prepare(["got10k"], tmp / "data2", tmp / "archives", [str(tmp / "missing.zip")])
+        raise AssertionError("missing source accepted")
+    except FileNotFoundError:
+        pass
+
+
+def test_google_drive_links_and_web_pages():
+    file_id = "1b75MBq7MbDQUc682IoECIekoRim_Ydk1"
+    direct = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t"
+    for url in (f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
+                f"https://drive.google.com/open?id={file_id}", f"https://drive.google.com/uc?export=download&id={file_id}"):
+        assert td.direct_url(url) == direct
+    assert td.direct_url("http://images.cocodataset.org/zips/train2017.zip").endswith("train2017.zip")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        (tmp / "page.html").write_text("<html>quota exceeded</html>")
+        handler = functools.partial(_QuietHandler, directory=str(tmp))
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            td.download(f"http://127.0.0.1:{server.server_address[1]}/page.html", tmp / "dl")
+            raise AssertionError("web page accepted as a download")
+        except RuntimeError as e:
+            assert "web page" in str(e)
+        finally:
+            server.shutdown()
+        assert not (tmp / "dl" / td.URL_MAP).exists() and not list((tmp / "dl").glob("page*"))
+
+
 if __name__ == "__main__":  # without pytest: python -m tests.test_train_data
     for _name, _fn in sorted(globals().items()):
         if _name.startswith("test_") and callable(_fn):

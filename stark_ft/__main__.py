@@ -13,7 +13,7 @@ Command-line interface. The notebooks call this interface as well, using the vot
     python -m stark_ft train   [--config train.yaml] [--set key=value ...] [--overwrite] [--dry-run]
     python -m stark_ft train-report <run name or folder> [--no-plot] [--json]
     python -m stark_ft train-list
-    python -m stark_ft prepare-train-data --datasets got10k coco [--archives DIR] [--got10k-url URL ...]
+    python -m stark_ft prepare-train-data --datasets got10k coco [--archives DIR] [--got10k-url URL|PATH ...]
                                           [--delete-archives]
 """
 import argparse
@@ -232,7 +232,7 @@ def main(argv=None):
     p = sub.add_parser("prepare-train-data", help="Download / extract the training datasets (got10k, coco)")
     p.add_argument("--datasets", nargs="+", required=True, choices=["got10k", "got10k_full", "coco"])
     p.add_argument("--archives", help="Folder for the downloaded archives (default: <train_data>/_archives)")
-    p.add_argument("--got10k-url", action="append", default=[], help="GOT-10k download link (repeatable)")
+    p.add_argument("--got10k-url", action="append", default=[], help="GOT-10k archive: download link (Google Drive share links work) or path (repeatable)")
     p.add_argument("--delete-archives", action="store_true", help="Delete the archives after extracting them")
     args = parser.parse_args(argv)
 

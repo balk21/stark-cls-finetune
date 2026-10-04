@@ -446,12 +446,25 @@ gerekir; doğrulamasız eğitim için `val_datasets=[]` verin.
 ```
 
 **GOT-10k** ancak [got-10k.aitestunion.com/downloads](http://got-10k.aitestunion.com/downloads) adresinde ücretsiz
-kayıttan sonra indirilebilir; indirme linkleri e-postayla gelir. Linkleri notebook'taki `GOT10K_URLS` listesine
-yazın (CLI: `--got10k-url`) ya da **train** arşivlerini kendiniz indirip `<archives>/got10k/` klasörüne koyun
-(Colab'de: `MyDrive/stark-cls-finetune/train_archives/got10k/`). Hazırlık bu klasördeki tüm arşivleri, arşiv
-içindeki arşivleri de (örn. train split zip'lerini içeren bir `full_data.zip`) açar, 9 335 train videosunun
-tamamının bulunduğunu kontrol eder ve resmi `list.txt` dosyasını alır (yoksa birebir aynısını oluşturur: sıralı
-isimler; `data_specs` bölüm dosyaları bu sıraya göre indeksler).
+kayıttan sonra indirilebilir; indirme linkleri e-postayla gelir. Linkler Google Drive'a da işaret edebilir, örn.
+`full_data.zip` (70.7 GB; içinde `train/`, `val/` ve `test/` vardır). Arşivler üç şekilde verilebilir:
+
+1. **Colab'de, Google Drive'daki bir dosya için (önerilen):** linki tarayıcıda Colab'de kullandığınız Google hesabıyla
+   açın, *Drive'a kısayol ekle* seçeneğiyle kısayolu `MyDrive/stark-cls-finetune/train_archives/got10k/` klasörüne
+   koyun ve `GOT10K_URLS` listesini boş bırakın. Hiçbir şey indirilmez veya kopyalanmaz: arşiv her yeni oturumda
+   Drive'dan okunur ve yerel diske açılır. Dosyanın indirme kotası dolduğu için okuma başarısız olursa, bunun yerine
+   aynı klasöre bir kopyasını oluşturun (kısayola sağ tık → *Kopyasını oluştur*; Drive'da 70.7 GB yer gerekir).
+2. `GOT10K_URLS` içinde **linkler** (CLI: `--got10k-url`): arşiv klasörüne bir kez indirilir, kaldığı yerden devam
+   edebilir. Google Drive paylaşım linkleri (`https://drive.google.com/file/d/<id>/view...`) doğrudan indirme linkine
+   çevrilir. Colab'de arşiv klasörü Drive'da olduğu için 70 GB'lık indirme mount üzerinden Drive'a yazılır; 1. yol
+   bunu önler.
+3. Zaten bir yerde duran **dosyalar**: `<archives>/got10k/` klasörüne koyun ya da yollarını (veya bir klasörü)
+   `GOT10K_URLS` içinde verin; yollar yerinde kullanılır ve asla silinmez.
+
+Yalnızca train videoları ve `list.txt` dosyaları açılır (`val/` ve `test/` atlanır); arşiv içindeki arşivlerden
+(örn. train split zip'leri) de. Hazırlık 9 335 train videosunun tamamının bulunduğunu kontrol eder ve resmi
+`list.txt` dosyasını alır (yoksa birebir aynısını oluşturur: sıralı isimler; `data_specs` bölüm dosyaları bu sıraya
+göre indeksler).
 
 **COCO** otomatik indirilir (`train2017.zip`, `annotations_trainval2017.zip`); yarıda kalan indirme kaldığı yerden
 devam eder ve 118 287 görüntünün tamamı kontrol edilir.
@@ -464,7 +477,7 @@ klasörü yalnızca okunur, asla değiştirilmez. Zaten açılmış bir GOT-10k 
 var olacak şekilde `train_data` ayarlanarak doğrudan kullanılabilir.
 
 **Colab'de alan:** Google Drive arşivleri (COCO 19.6 GB, GOT-10k ≈ train arşivlerinin boyutu) ve eğitim koşularını
-(§8.5) tutar; oturumun yerel diski açılmış veri setlerini (GOT-10k + COCO ≈ 94 GB) ve ortamı (≈ 8 GB) tutabilmelidir.
+(§8.5) tutar; oturumun yerel diski açılmış veri setlerini (GOT-10k ≈ 74 GB, COCO ≈ 20 GB) ve ortamı (≈ 8 GB) tutabilmelidir.
 Disk yetmezse hazırlık, ne kadar alan gerektiğini söyleyen bir mesajla durur.
 
 ### 8.4 Parametreler (`TrainConfig`, `stark_ft/training.py`)

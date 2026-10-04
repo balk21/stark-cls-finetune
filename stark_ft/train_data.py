@@ -8,14 +8,19 @@ Preparing the training datasets in the layout expected by lib/train/dataset:
 
 COCO 2017 is downloaded from the official server (images.cocodataset.org). GOT-10k can only be downloaded after a
 (free) registration on http://got-10k.aitestunion.com/downloads, which sends the download links by e-mail, so it is
-prepared from the official archives: either pass their URLs (`got10k_urls`) or put the files into <archives>/got10k/
-yourself (e.g. the train split zips; archives inside archives, such as a full_data.zip, are extracted as well).
+prepared from the official archives (e.g. full_data.zip, or the train split zips; archives inside archives are
+extracted as well), given in `got10k_urls` as
+  - download links (Google Drive share links such as https://drive.google.com/file/d/<id>/view are converted to
+    direct downloads), or
+  - paths of archives / folders, used in place (e.g. a shortcut on the mounted Google Drive in Colab),
+or put into <archives>/got10k/. Only the GOT-10k train videos (and list.txt files) are extracted from them.
 
 The archives are kept in an archive folder (default <train_data>/_archives; on Colab a folder on Google Drive), so
 another machine / a new Colab session only has to extract them. Extraction goes into a temporary folder that is
 renamed when it is complete, so an interrupted preparation never leaves a half-extracted dataset behind. A dataset
 folder that already has the expected layout is only read, never modified.
 """
+import fnmatch
 import json
 import os
 import re
@@ -38,6 +43,10 @@ GOT10K_SEQ = re.compile(r"^GOT-10k_Train_\d{6}$")
 ARCHIVE_SUFFIXES = (".zip", ".tar", ".tar.gz", ".tgz")
 TMP_NAME = ".stark_prepare_tmp"
 URL_MAP = ".downloads.json"  # url -> file name of finished downloads (e-mailed links may expire)
+# Members extracted from GOT-10k archives: train videos, list.txt files and archives inside archives
+GOT10K_MEMBERS = ("*GOT-10k_Train_*", "*list.txt") + tuple("*" + s for s in ARCHIVE_SUFFIXES)
+_DRIVE_ID = re.compile(r"(?:drive\.google\.com/(?:file/d/|open\?(?:[^#]*&)?id=|uc\?(?:[^#]*&)?id=)"
+                       r"|drive\.usercontent\.google\.com/download\?(?:[^#]*&)?id=)([\w-]{20,})")
 FREE_MARGIN = 2e9
 
 
@@ -83,6 +92,24 @@ def _filename_from_response(url, response):
     return Path(urllib.parse.unquote(urllib.parse.urlparse(response.geturl()).path)).name
 
 
+def direct_url(url: str) -> str:
+    """Google Drive share links ('.../file/d/<id>/view', 'open?id=<id>', 'uc?id=<id>') -> direct download link
+    (without the "cannot scan for viruses" confirmation page). Other URLs are returned unchanged."""
+    m = _DRIVE_ID.search(url)
+    return f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t" if m else url
+
+
+def _open(url, headers=None):
+    r = urllib.request.urlopen(urllib.request.Request(direct_url(url), headers=headers or {}), timeout=60)
+    if r.headers.get("Content-Type", "").startswith("text/html"):
+        r.close()
+        raise RuntimeError(
+            f"{url} returned a web page instead of a file. Use the direct download link. For a Google Drive file this "
+            "usually means that its download quota is exceeded or that it is not shared with 'anyone with the link'; "
+            "on Colab, add the file to your own Drive instead (README, §8.3).")
+    return r
+
+
 def download(url: str, dst_dir: Path, filename: str = None) -> Path:
     """Downloads `url` into dst_dir, resuming an interrupted download (<file>.part). Returns the file path."""
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +119,7 @@ def download(url: str, dst_dir: Path, filename: str = None) -> Path:
     if filename and (dst_dir / filename).is_file():
         return dst_dir / filename
 
-    r = urllib.request.urlopen(url, timeout=60)
+    r = _open(url)
     try:
         filename = filename or _filename_from_response(url, r)
         if not filename:
@@ -103,8 +130,7 @@ def download(url: str, dst_dir: Path, filename: str = None) -> Path:
             pos = part.stat().st_size if part.is_file() else 0
             if pos:
                 r.close()
-                r = urllib.request.urlopen(urllib.request.Request(url, headers={"Range": f"bytes={pos}-"}),
-                                           timeout=60)
+                r = _open(url, {"Range": f"bytes={pos}-"})
                 if r.status != 206:  # the server ignored the Range header: start again
                     pos = 0
             _log(f"Downloading {filename} ({_gb(total) if total else 'unknown size'})"
@@ -131,11 +157,15 @@ def download(url: str, dst_dir: Path, filename: str = None) -> Path:
 
 
 # ---------------------------------------------------------------------- extraction
-def _uncompressed_size(archive: Path) -> int:
+def _selected(name: str, members) -> bool:
+    return members is None or any(fnmatch.fnmatch(name, pattern) for pattern in members)
+
+
+def _uncompressed_size(archive: Path, members=None) -> int:
     if archive.name.lower().endswith(".zip"):
         try:
             with zipfile.ZipFile(archive) as z:
-                return sum(i.file_size for i in z.infolist())
+                return sum(i.file_size for i in z.infolist() if _selected(i.filename, members))
         except zipfile.BadZipFile:
             raise RuntimeError(f"{archive} is not a valid zip file (incomplete download?). Delete it and run the "
                                "preparation again.") from None
@@ -153,20 +183,34 @@ def _check_space(where: Path, needed: int, what: str):
                            "on fewer datasets.")
 
 
-def extract(archive: Path, dst: Path):
+def extract(archive: Path, dst: Path, members=None):
+    """Extracts the archive (only the members matching the wildcard patterns `members`, if given) into dst."""
     dst.mkdir(parents=True, exist_ok=True)
     _log(f"Extracting {archive.name} ({_gb(archive.stat().st_size)}) ...")
     if archive.name.lower().endswith(".zip"):
+        if members is not None:  # only patterns that are the first match of some member (unzip warns otherwise)
+            with zipfile.ZipFile(archive) as z:
+                names = z.namelist()
+            regexes, used = [re.compile(fnmatch.translate(m)) for m in members], set()
+            for name in names:
+                first = next((i for i, r in enumerate(regexes) if r.match(name)), None)
+                if first is not None:
+                    used.add(first)
+                    if len(used) == len(regexes):
+                        break
+            members = [m for i, m in enumerate(members) if i in used]
+            if not members:
+                return
         if shutil.which("unzip"):
-            rc = subprocess.run(["unzip", "-q", "-o", str(archive), "-d", str(dst)]).returncode
-            if rc not in (0, 1):  # 1 = warnings only
+            rc = subprocess.run(["unzip", "-q", "-o", str(archive), *(members or ()), "-d", str(dst)]).returncode
+            if rc not in (0, 1, 11):  # 1 = warnings only, 11 = no matching members
                 raise RuntimeError(f"unzip failed for {archive} (exit code {rc})")
         else:
             with zipfile.ZipFile(archive) as z:
-                z.extractall(dst)
+                z.extractall(dst, [n for n in z.namelist() if _selected(n, members)])
     else:
         with tarfile.open(archive) as t:
-            t.extractall(dst)
+            t.extractall(dst, [m for m in t.getmembers() if _selected(m.name, members)])
 
 
 # ---------------------------------------------------------------------- COCO
@@ -208,28 +252,37 @@ def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=
     if train_dir.exists():
         raise RuntimeError(f"{train_dir} exists but has no list.txt (not a complete GOT-10k train folder). "
                            "Move it away or fix it.")
-    for url in urls:
-        download(url, archive_dir)
-    archives = _walk(archive_dir)[0] if archive_dir.is_dir() else []
+    archives = []
+    for src in urls:  # download links, or archives / folders that are used in place
+        path = Path(os.path.expanduser(str(src)))
+        if re.match(r"^(https?|ftp)://", str(src)):
+            download(str(src), archive_dir)
+        elif path.is_dir():
+            archives += _walk(path)[0]
+        elif path.is_file() and path.name.lower().endswith(ARCHIVE_SUFFIXES):
+            archives.append(path)
+        else:
+            raise FileNotFoundError(f"GOT-10k source {src!r} is neither a URL nor an existing archive / folder")
+    archives = sorted(set(archives + (_walk(archive_dir)[0] if archive_dir.is_dir() else [])))
     if not archives:
         raise FileNotFoundError(
             f"No GOT-10k archives in {archive_dir}.\nGOT-10k needs a (free) registration at "
-            "http://got-10k.aitestunion.com/downloads . Then either pass the download links from the e-mail as "
-            "got10k_urls, or put the train archives into that folder.")
+            "http://got-10k.aitestunion.com/downloads . Then either pass the download links from the e-mail (or "
+            "paths of the archives) as got10k_urls, or put the train archives into that folder.")
     tmp = train_dir.parent / TMP_NAME
     if tmp.exists():
         shutil.rmtree(tmp)
-    _check_space(tmp, sum(_uncompressed_size(a) for a in archives), "GOT-10k")
+    _check_space(tmp, sum(_uncompressed_size(a, GOT10K_MEMBERS) for a in archives), "GOT-10k")
     try:
         for a in archives:
-            extract(a, tmp / "extracted")
+            extract(a, tmp / "extracted", GOT10K_MEMBERS)
         # Archives inside archives (e.g. full_data.zip -> .../GOT-10k_Train_split_01.zip, ...): extract them one
         # at a time and delete each (temporary) copy right away to limit the disk usage.
         nested, sequences = _walk(tmp / "extracted")
         while nested:
             for a in nested:
-                _check_space(tmp, _uncompressed_size(a), a.name)
-                extract(a, a.parent)
+                _check_space(tmp, _uncompressed_size(a, GOT10K_MEMBERS), a.name)
+                extract(a, a.parent, GOT10K_MEMBERS)
                 a.unlink()
             nested, sequences = _walk(tmp / "extracted")
         if len(sequences) != GOT10K_TRAIN_SEQUENCES:
@@ -250,9 +303,10 @@ def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=
         os.replace(out, train_dir)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    if delete_archives:
+    if delete_archives:  # only the copies in the archive folder, never archives given by path
         for a in archives:
-            a.unlink()
+            if archive_dir.resolve() in a.resolve().parents:
+                a.unlink()
     _log(f"GOT-10k ready: {train_dir} ({len(names)} sequences)")
     return train_dir
 

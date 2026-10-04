@@ -445,11 +445,24 @@ from `GOT10K_vottrain` (as in STARK). It needs the GOT-10k folder even when trai
 
 **GOT-10k** can only be downloaded after a free registration at
 [got-10k.aitestunion.com/downloads](http://got-10k.aitestunion.com/downloads); the download links are sent by
-e-mail. Either put the links into `GOT10K_URLS` in the notebook (CLI: `--got10k-url`), or download the **train**
-archives yourself and put them into `<archives>/got10k/` (on Colab: `MyDrive/stark-cls-finetune/train_archives/got10k/`).
-The preparation extracts every archive in that folder, also archives inside archives (e.g. a `full_data.zip` that
-contains the train split zips), checks that all 9 335 train videos are there, and takes the official `list.txt`
-(or creates an identical one: sorted names, the order the `data_specs` split files index into).
+e-mail. They may point to Google Drive, e.g. `full_data.zip` (70.7 GB; contains `train/`, `val/` and `test/`).
+The archives can be given in three ways:
+
+1. **On Colab, for a file on Google Drive (recommended):** open the link in the browser with the Google account you
+   use in Colab, choose *Add shortcut to Drive* and put the shortcut into
+   `MyDrive/stark-cls-finetune/train_archives/got10k/`; leave `GOT10K_URLS` empty. Nothing is downloaded or copied:
+   the archive is read from Drive and extracted to the local disk in every new session. If reading it fails because
+   the file's download quota is exceeded, make a copy of it into the same folder instead (right-click the shortcut →
+   *Make a copy*; needs 70.7 GB of Drive space).
+2. **Links** in `GOT10K_URLS` (CLI: `--got10k-url`): downloaded once into the archive folder, resumable. Google Drive
+   share links (`https://drive.google.com/file/d/<id>/view...`) are converted to direct downloads. On Colab the archive
+   folder is on Drive, so a 70 GB download is written to Drive through the mount; option 1 avoids that.
+3. **Files** that are already somewhere: put them into `<archives>/got10k/`, or give their paths (or a folder) in
+   `GOT10K_URLS`; paths are used in place and never deleted.
+
+Only the train videos and `list.txt` files are extracted (`val/` and `test/` are skipped), also from archives inside
+archives (e.g. train split zips). The preparation checks that all 9 335 train videos are there and takes the official
+`list.txt` (or creates an identical one: sorted names, the order the `data_specs` split files index into).
 
 **COCO** is downloaded automatically (`train2017.zip`, `annotations_trainval2017.zip`), with resuming of an
 interrupted download, and checked for 118 287 images.
@@ -462,7 +475,7 @@ is only read, never modified. An existing extracted GOT-10k copy can be used dir
 `<train_data>/got10k/train/list.txt` exists.
 
 **Space on Colab:** Google Drive holds the archives (COCO 19.6 GB, GOT-10k ≈ the size of its train archives) and
-the training runs (§8.5); the local disk of the runtime must hold the extracted datasets (GOT-10k + COCO ≈ 94 GB)
+the training runs (§8.5); the local disk of the runtime must hold the extracted datasets (GOT-10k ≈ 74 GB, COCO ≈ 20 GB)
 plus the environment (≈ 8 GB). If the runtime's disk is too small, the preparation stops with a message saying how
 much is needed.
 

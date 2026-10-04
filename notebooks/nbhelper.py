@@ -288,7 +288,8 @@ def training_datasets(params: dict):
 
 def prepare_training_data(datasets, got10k_urls=(), archives=None, delete_archives=False):
     """Downloads / extracts the training datasets ("got10k", "coco") into `train_data`. On Colab the archives are
-    kept on Google Drive (<drive_root>/train_archives), so later sessions only extract them."""
+    kept on Google Drive (<drive_root>/train_archives), so later sessions only extract them. got10k_urls: download
+    links (Google Drive share links work) or paths of GOT-10k archives / folders (used in place)."""
     archives = archives or _COLAB_INFO.get("train_archives")
     args = ["prepare-train-data", "--datasets", *datasets]
     if archives:
