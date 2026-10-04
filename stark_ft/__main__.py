@@ -10,6 +10,11 @@ Command-line interface. The notebooks call this interface as well, using the vot
     python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
     python -m stark_ft download-checkpoints [--model stark_st] [--model-config baseline_R101 ...]
     python -m stark_ft download-dataset
+    python -m stark_ft train   [--config train.yaml] [--set key=value ...] [--overwrite] [--dry-run]
+    python -m stark_ft train-report <run name or folder> [--no-plot] [--json]
+    python -m stark_ft train-list
+    python -m stark_ft prepare-train-data --datasets got10k coco [--archives DIR] [--got10k-url URL ...]
+                                          [--delete-archives]
 """
 import argparse
 import json
@@ -76,6 +81,73 @@ def cmd_show(args):
     for k, v in info["config"].items():
         print(f"  {k:22s} = {v!r}")
     return 0 if info["checkpoint_exists"] and "sequences" in info else 1
+
+
+def _build_train_config(args):
+    from stark_ft.training import TrainConfig
+    data = {}
+    if args.config:
+        data = TrainConfig.from_file(args.config).to_dict()
+    for item in args.set or []:
+        key, _, value = item.partition("=")
+        data[key.strip()] = yaml.safe_load(value)
+    return TrainConfig.from_dict(data).validate()
+
+
+def cmd_train(args):
+    from stark_ft import training
+    tc = _build_train_config(args)
+    info = training.describe(tc)
+    if args.json:
+        print(json.dumps(info, ensure_ascii=False))
+        return 0
+    if args.dry_run:
+        print(f"Run         : {info['run_name']}{'  (EXISTS - resumed if the parameters are the same)' if info['run_exists'] else ''}")
+        print(f"Folder      : {info['run_dir']}")
+        print(f"Export      : {info['export']}")
+        print(f"Epochs      : {info['epochs']}, {info['steps_per_epoch']} optimizer steps/epoch, "
+              f"{info['accumulation']} micro-batches/step")
+        print(f"Init        : {info['init'] or info['init_error']}")
+        for d, root in info["dataset_roots"].items():
+            print(f"Dataset     : {d:12s} {root}")
+        for p in info["dataset_problems"]:
+            print(f"PROBLEM     : {p}")
+        print("Parameters:")
+        for k, v in info["config"].items():
+            print(f"  {k:22s} = {v!r}")
+        return 1 if info["dataset_problems"] or info["init_error"] else 0
+    out = training.run_training(tc, overwrite=args.overwrite)
+    print(f"\n{OUTPUT_DIR_MARKER}{out}")
+    return 0
+
+
+def _print_status(st):
+    state = "finished" if st["finished"] else f"{st['epochs_done']}/{st['total_epochs']} epochs"
+    line = f"{st['run_name']}: stage {st['stage']}, {st['model_config']}, {'+'.join(st['datasets'])} - {state}"
+    if not st["finished"] and st.get("remaining_hours") is not None:
+        line += f" (~{st['remaining_hours']:.1f} h left at {st['epoch_seconds'] / 60:.1f} min/epoch)"
+    print(line)
+
+
+def cmd_train_report(args):
+    from stark_ft import training
+    st = training.report(args.run, plot=not args.no_plot)
+    if args.json:
+        print(json.dumps(st, ensure_ascii=False))
+        return 0
+    _print_status(st)
+    print(f"Folder      : {st['run_dir']}")
+    print(f"GPU         : {st['gpu']}")
+    print(f"Init        : {st['init'] or 'ImageNet'}")
+    for col, v in st["last"].items():
+        print(f"  {col:24s} {v['value']:.5f}  (epoch {v['epoch']})")
+    if st.get("plot"):
+        print(f"Plot        : {st['plot']}")
+    if st["finished"]:
+        hint = (f"checkpoint='train:{st['run_name']}'" if st["stage"] == 2
+                else f"stage 2 with init='{st['run_name']}'")
+        print(f"Use with    : {hint}")
+    return 0
 
 
 def cmd_compare(args):
@@ -147,6 +219,21 @@ def main(argv=None):
     p.add_argument("--model-config", nargs="+", default=["baseline_R101"])
     p.add_argument("--force", action="store_true")
     sub.add_parser("download-dataset", help="Download the VOT-LT2020 sequences")
+    p = sub.add_parser("train", help="Train STARK-ST (stage 1 or 2) on a combination of datasets")
+    _add_config_args(p)
+    p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--dry-run", action="store_true", help="Only validate and show what would be done")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("train-report", help="Progress of a training run; writes history.png")
+    p.add_argument("run", help="Run name (in train_outputs) or run folder")
+    p.add_argument("--no-plot", action="store_true")
+    p.add_argument("--json", action="store_true")
+    sub.add_parser("train-list", help="List the training runs")
+    p = sub.add_parser("prepare-train-data", help="Download / extract the training datasets (got10k, coco)")
+    p.add_argument("--datasets", nargs="+", required=True, choices=["got10k", "got10k_full", "coco"])
+    p.add_argument("--archives", help="Folder for the downloaded archives (default: <train_data>/_archives)")
+    p.add_argument("--got10k-url", action="append", default=[], help="GOT-10k download link (repeatable)")
+    p.add_argument("--delete-archives", action="store_true", help="Delete the archives after extracting them")
     args = parser.parse_args(argv)
 
     if args.cmd == "check":
@@ -178,6 +265,23 @@ def main(argv=None):
     if args.cmd == "download-checkpoints":
         from stark_ft.setup_utils import download_checkpoints
         download_checkpoints([(args.model, c) for c in args.model_config], force=args.force)
+        return 0
+    if args.cmd == "train":
+        return cmd_train(args)
+    if args.cmd == "train-report":
+        return cmd_train_report(args)
+    if args.cmd == "train-list":
+        from stark_ft.training import list_runs
+        runs = list_runs()
+        for st in runs:
+            _print_status(st)
+        if not runs:
+            print("No training runs.")
+        return 0
+    if args.cmd == "prepare-train-data":
+        from stark_ft.paths import get_paths
+        from stark_ft.train_data import prepare
+        prepare(args.datasets, get_paths().train_data, args.archives, args.got10k_url, args.delete_archives)
         return 0
     if args.cmd == "download-dataset":
         from stark_ft.setup_utils import download_dataset

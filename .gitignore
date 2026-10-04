@@ -1,7 +1,7 @@
 # Large / machine-specific files
-checkpoints/
-data/
-outputs/
+/checkpoints/
+/data/
+/outputs/
 configs/paths.local.yaml
 
 # Python / Jupyter

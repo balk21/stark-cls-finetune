@@ -2,10 +2,12 @@
 Path resolution. There are no hard-coded (absolute) paths anywhere in the code.
 
 Priority (later entries override earlier ones):
-  1. Defaults (relative to the repository root):  checkpoints/, data/votlt2020/sequences/, outputs/
+  1. Defaults (relative to the repository root):  checkpoints/, data/votlt2020/sequences/, outputs/,
+     data/train/, outputs/training/
   2. configs/paths.yaml          (in the repository; relative paths are resolved against the repository root)
   3. configs/paths.local.yaml    (ignored by git; for machine-specific settings)
-  4. Environment variables: STARK_CLEAN_CHECKPOINTS, STARK_CLEAN_DATASET, STARK_CLEAN_OUTPUTS
+  4. Environment variables: STARK_CLEAN_CHECKPOINTS, STARK_CLEAN_DATASET, STARK_CLEAN_OUTPUTS,
+     STARK_CLEAN_TRAIN_DATA, STARK_CLEAN_TRAIN_OUTPUTS
 """
 import os
 from dataclasses import dataclass
@@ -20,11 +22,15 @@ _KEYS = {
     "checkpoints": "STARK_CLEAN_CHECKPOINTS",
     "dataset": "STARK_CLEAN_DATASET",
     "outputs": "STARK_CLEAN_OUTPUTS",
+    "train_data": "STARK_CLEAN_TRAIN_DATA",
+    "train_outputs": "STARK_CLEAN_TRAIN_OUTPUTS",
 }
 _DEFAULTS = {
     "checkpoints": "checkpoints",
     "dataset": "data/votlt2020/sequences",
     "outputs": "outputs",
+    "train_data": "data/train",
+    "train_outputs": "outputs/training",
 }
 
 
@@ -33,6 +39,8 @@ class Paths:
     checkpoints: Path  # <checkpoints>/<stark_st2|stark_s>/<model_config>/<checkpoint file>
     dataset: Path      # VOT-format sequence folder: <dataset>/<sequence>/{color/, groundtruth.txt, sequence}
     outputs: Path      # Each experiment is written to <outputs>/<experiment name>/
+    train_data: Path   # Training datasets: <train_data>/{got10k/train, coco, lasot, trackingnet}
+    train_outputs: Path  # Each training run is written to <train_outputs>/<run name>/
 
     def as_dict(self):
         return {k: str(v) for k, v in self.__dict__.items()}

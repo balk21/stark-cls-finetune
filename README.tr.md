@@ -6,8 +6,11 @@ Bu depo, [STARK](https://github.com/researchmm/Stark) (ICCV 2021) tracker'ının
 test (inference) sırasında, her videoya özel olarak **sınıflandırma başlığını (cls_head) fine-tune etme**
 yöntemini ekler ve bunu **VOT-LT2020** üzerinde, **detection tarzı (COCO)** metriklerle değerlendirir.
 
+Depo ayrıca **orijinal STARK-ST eğitimini** (iki aşama) içerir: tek GPU'da, orijinal effective batch boyutuyla ve
+**eğitim veri setlerinin herhangi bir kombinasyonuyla** çalışır (bkz. [§8](#8-stark-st-eğitimi-base-training)).
+
 Tüm iş akışı Jupyter notebook'ları üzerinden yürür. Kod hiçbir sabit dosya yolu içermez; aynı repo
-Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
+Vast.ai sunucusunda, Google Colab'de ve kişisel bilgisayarda çalışır.
 
 ---
 
@@ -19,11 +22,12 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
 5. [Parametreler](#5-parametreler)
 6. [Çıktılar ve dosya formatları](#6-çıktılar-ve-dosya-formatları)
 7. [Metrikler](#7-metrikler)
-8. [Komut satırı (CLI)](#8-komut-satırı-cli)
-9. [Sık karşılaşılan sorunlar](#9-sık-karşılaşılan-sorunlar)
-10. [Bilinen sınırlamalar ve açık konular](#10-bilinen-sınırlamalar-ve-açık-konular)
-11. [Eski koddan farklar ve düzeltilen hatalar](#11-eski-koddan-farklar-ve-düzeltilen-hatalar)
-12. [Lisans ve atıf](#12-lisans-ve-atıf)
+8. [STARK-ST eğitimi (base training)](#8-stark-st-eğitimi-base-training)
+9. [Komut satırı (CLI)](#9-komut-satırı-cli)
+10. [Sık karşılaşılan sorunlar](#10-sık-karşılaşılan-sorunlar)
+11. [Bilinen sınırlamalar ve açık konular](#11-bilinen-sınırlamalar-ve-açık-konular)
+12. [Eski koddan farklar ve düzeltilen hatalar](#12-eski-koddan-farklar-ve-düzeltilen-hatalar)
+13. [Lisans ve atıf](#13-lisans-ve-atıf)
 
 ---
 
@@ -51,6 +55,7 @@ Vast.ai sunucusunda da kişisel bilgisayarda da çalışır.
    `vot1` ortamı kurulur, checkpoint ve veri seti indirilir, kısa bir duman testi yapılır.
 4. `notebooks/01_run_experiment.ipynb` dosyasında parametreleri düzenleyip deneyi çalıştırın.
 5. `notebooks/02_compare.ipynb` ile deneyleri karşılaştırın.
+6. İsteğe bağlı: STARK-ST'nin kendisini `notebooks/03_train.ipynb` ile eğitin (bkz. [§8](#8-stark-st-eğitimi-base-training)).
 
 > **Notebook çekirdeği:** Herhangi bir Python 3 çekirdeği yeterlidir. Notebook'lar asıl işi arka planda
 > `vot1` ortamının Python'u ile yaptırır (`notebooks/nbhelper.py`). Çekirdek değiştirmeniz gerekmez.
@@ -81,6 +86,9 @@ Colab her oturumda yeni bir makine verir. Bu yüzden hazırlaması uzun süren h
 **Gereken Google Drive alanı:** ≈ 26 GB + deney çıktıları. Kendi checkpoint'lerinizi
 `MyDrive/stark-cls-finetune/checkpoints/<stark_st2|stark_s>/<model_config>/` altına yükleyebilirsiniz.
 
+**Colab'de eğitim:** `03_train.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb)
+notebook'unu doğrudan açın; VOT veri setine ihtiyaç duymaz (bkz. [§8](#8-stark-st-eğitimi-base-training)).
+
 ## 2. Kendi bilgisayarınızda
 
 Aynı notebook'lar kullanılır. Checkpoint veya veri seti zaten başka bir yerdeyse indirmek yerine
@@ -90,10 +98,13 @@ Aynı notebook'lar kullanılır. Checkpoint veya veri seti zaten başka bir yerd
 checkpoints: /home/kullanici/stark/checkpoints/train   # <checkpoints>/stark_st2/baseline_R101/STARKST_ep0050.pth.tar
 dataset: /home/kullanici/vot/votlt2020/sequences        # <dataset>/<dizi>/{color/, groundtruth.txt, sequence}
 outputs: /home/kullanici/stark_outputs
+train_data: /veri/tracking_train                        # yalnızca eğitim: <train_data>/{got10k/train, coco, ...} (§8.3)
+train_outputs: /home/kullanici/stark_training           # yalnızca eğitim: her eğitim koşusu için bir klasör (§8.5)
 ```
 
-Bu dosya git'e girmez. Aynı ayarlar `STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET` ve `STARK_CLEAN_OUTPUTS`
-ortam değişkenleriyle de verilebilir (öncelik: ortam değişkeni > `paths.local.yaml` > `paths.yaml`).
+Bu dosya git'e girmez. Aynı ayarlar `STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET`, `STARK_CLEAN_OUTPUTS`,
+`STARK_CLEAN_TRAIN_DATA` ve `STARK_CLEAN_TRAIN_OUTPUTS` ortam değişkenleriyle de verilebilir (öncelik: ortam
+değişkeni > `paths.local.yaml` > `paths.yaml`).
 
 Veri seti klasörüne **hiçbir dosya yazılmaz**. VOT-toolkit'in ihtiyaç duyduğu `list.txt`, her deneyin kendi
 `vot_workspace/` klasöründe, dizilerin mutlak yollarıyla oluşturulur.
@@ -107,6 +118,7 @@ stark-cls-finetune/
 │   ├── 00_setup_colab.ipynb      Google Colab'de kurulum (ortam / veri seti Google Drive'da önbelleklenir)
 │   ├── 01_run_experiment.ipynb   Parametreler → çalıştırma → sonuçlar
 │   ├── 02_compare.ipynb          Deney karşılaştırma
+│   ├── 03_train.ipynb            STARK-ST eğitimi (aşama 1 / 2), veri seti kombinasyonlarıyla
 │   ├── nbhelper.py               Notebook yardımcıları (yalnızca standart kütüphane)
 │   └── colab_setup.py            Google Colab oturum hazırlığı (yalnızca standart kütüphane)
 ├── stark_ft/                     Deney altyapısı
@@ -120,23 +132,26 @@ stark-cls-finetune/
 │   ├── plots.py                  Grafikler
 │   ├── compare.py                Deney karşılaştırma
 │   ├── setup_utils.py            Ortam kontrolü, indirme, duman testi
+│   ├── training.py               TrainConfig: eğitim parametreleri, koşu klasörleri, devam etme, dışa aktarma
+│   ├── train_data.py             Eğitim veri setlerini indirme / açma
 │   └── __main__.py               CLI (python -m stark_ft ...)
-├── lib/                          STARK çekirdeği (yalnızca inference için gerekenler)
+├── lib/                          STARK çekirdeği
 │   ├── models/stark/             Ağ mimarisi (orijinal STARK)
-│   ├── config/                   Model config varsayılanları (orijinal STARK)
+│   ├── config/                   Model config varsayılanları (orijinal STARK; stark_st1/ aşama-1 eğitiminde kullanılır)
+│   ├── train/                    STARK eğitim kodu (orijinalden: veri yükleme, actor'lar, trainer)
 │   ├── test/tracker/
 │   │   ├── stark_st.py           STARK-ST tracker (orijinal + update kayıtları)
 │   │   ├── stark_st_ft.py        ★ Fine-tune'lu tracker
 │   │   ├── ft_sampling.py        ★ Pozitif jitter ve negatif bölge üretimi
 │   │   └── stark_s.py            STARK-S tracker
 │   └── utils/
-├── model_configs/                STARK model YAML'ları (stark_st2/, stark_s/)
+├── model_configs/                STARK model YAML'ları (stark_st1/, stark_st2/, stark_s/)
 ├── configs/
 │   ├── paths.yaml                Varsayılan yollar
 │   ├── paths.local.example.yaml  Kişisel yol ayarı şablonu
 │   └── experiments/example.yaml  CLI için örnek deney dosyası
 ├── environment/vot1_environment.yml
-├── tests/test_sampling.py
+├── tests/                        python -m tests.<ad> (GPU gerekmez)
 ├── checkpoints/   data/   outputs/   (git'e girmez)
 ```
 
@@ -187,7 +202,7 @@ ile `online` fiilen `init` ile aynıdır.
 
 | Değer | Açıklama |
 |---|---|
-| `pos` | Yalnızca pozitif örnek. Yalnızca "1" etiketiyle eğitim, başlığın skorunu genel olarak yukarı iter; hedefin olmadığı karelerde de skor yükselir (bkz. §10). |
+| `pos` | Yalnızca pozitif örnek. Yalnızca "1" etiketiyle eğitim, başlığın skorunu genel olarak yukarı iter; hedefin olmadığı karelerde de skor yükselir (bkz. §11). |
 | `posneg` | Pozitif + negatif. Negatif, aynı karede, hedef kutusunun search kırpımının **tamamen dışında** kalacak şekilde kaydırılmış bir bölgedir (8 yön denenir, kırpımın görüntü içinde kalan oranı en yüksek olan seçilir). Bu, doğru negatif yöntemi bulunana kadar **geçici** bir çözümdür. |
 
 ## 5. Parametreler
@@ -203,7 +218,7 @@ Verilmeyen parametre varsayılan değerini alır.
 | `name` | `None` | Çıktı klasörünün adı (`outputs/<name>/`). `None` ise parametrelerden üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100_s0`. Boşluk ve `/\:*?"<>\|` içeremez. |
 | `model` | `"stark_st"` | `"stark_st"` (güven skorlu, fine-tune edilebilir) veya `"stark_s"` (skor yok; sabit 1.0 raporlanır, `ft_mode="none"` olmalı). |
 | `model_config` | `"baseline_R101"` | `model_configs/<stark_st2\|stark_s>/` altındaki YAML. `stark_st`: `baseline_R101` (ST101), `baseline` (ST50), `baseline_R101_got10k_only`, `baseline_got10k_only`. `stark_s`: `baseline`, `baseline_got10k_only`. |
-| `checkpoint` | `None` | `None` ise resmi dosya adı kullanılır (`STARKST_ep0050.pth.tar` / `STARKS_ep0500.pth.tar`). Yalnızca dosya adı verilirse `<checkpoints>/<stark_st2\|stark_s>/<model_config>/` içinde aranır, örn. `"STARKSTcoco_ep0050.pth.tar"`. `/` içeren değer yol olarak kullanılır (göreli ise depo köküne göre). |
+| `checkpoint` | `None` | `None` ise resmi dosya adı kullanılır (`STARKST_ep0050.pth.tar` / `STARKS_ep0500.pth.tar`). Yalnızca dosya adı verilirse `<checkpoints>/<stark_st2\|stark_s>/<model_config>/` içinde aranır, örn. `"STARKSTcoco_ep0050.pth.tar"`. `/` içeren değer yol olarak kullanılır (göreli ise depo köküne göre). `"train:<koşu adı>"` bir eğitim koşusunun sonucunu kullanır (`<train_outputs>/<koşu adı>/final.pth.tar`, §8.5). |
 
 ### Veri
 
@@ -368,7 +383,178 @@ aynıdır; seçilen eşik kaba kuvvetle bulunanla aynıdır (50 dizide test edil
   `F_opt`, VOT tanımıyla ortalama P ve R'den hesaplanır.
 - **Havuzlanmış (pooled):** tüm dizilerin kareleri tek veri seti gibi; uzun diziler daha çok ağırlık alır.
 
-## 8. Komut satırı (CLI)
+## 8. STARK-ST eğitimi (base training)
+
+`notebooks/03_train.ipynb`, STARK-ST modelinin kendisini **orijinal STARK eğitim prosedürüyle** (`lib/train/`,
+resmi depodan taşındı) ve **eğitim veri setlerinin herhangi bir kombinasyonuyla** eğitir: GOT-10k, COCO, LaSOT ve
+TrackingNet'ten tek biri, herhangi ikisi, üçü ya da dördü. GOT-10k ve COCO otomatik olarak indirilir / açılır.
+Eğitilen model, resmi model gibi, inference sırasında fine-tune ile veya fine-tune olmadan
+`checkpoint="train:<koşu adı>"` ile değerlendirilir (§5).
+
+### 8.1 Hızlı başlangıç
+
+1. `notebooks/03_train.ipynb` dosyasını açın (Colab: [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb); Colab'de **A100** veya **L4** GPU seçin).
+2. Parametreleri (`TRAIN = dict(...)`, §8.4) ve GOT-10k için indirme linklerini (§8.3) yazın.
+3. *Hazırlık* hücresini çalıştırın: Colab'de oturum VOT veri seti olmadan hazırlanır; ardından veri setleri indirilir /
+   açılır (yalnızca eksik olanlar) ve bir deneme çalıştırması (dry run) koşu klasörünü, epoch ve adım sayılarını ve
+   başlangıç ağırlıklarını gösterir.
+4. *Eğitim* hücresini çalıştırın. İlerleme satırları saniyedeki örnek sayısını, epoch'un ve eğitimin kalan süresini
+   gösterir. Hücreyi durdurmak koşuyu durdurur; tekrar çalıştırmak son tamamlanan epoch'tan **devam eder**.
+5. `nb.show_training(TRAIN)` ilerlemeyi ve `history.png` grafiğini istediğiniz zaman gösterir.
+
+### 8.2 Ne eğitilir
+
+| Aşama | Eğitilen parametreler | Epoch (LR ÷10) | Loss | Başlangıç |
+|---|---|---|---|---|
+| 1 | backbone + transformer + kutu başlığı (sınıflandırma başlığı kullanılmaz) | 500 (400'de) | GIoU × 2 + L1 × 5 | ImageNet ResNet backbone |
+| 2 | yalnızca sınıflandırma başlığı (geri kalan her şey dondurulur) | 50 (40'ta) | BCE | aşama-1 ağırlıkları (`init`) |
+
+İki aşamada da (`model_configs/stark_st1/` ve `model_configs/stark_st2/` altındaki YAML'lardan): epoch başına 60 000
+eğitim örneği, AdamW (lr 1e-4, backbone için × 0.1, weight decay 1e-4), norm 0.1'de gradyan kırpma, 20 (aşama 1) /
+10 (aşama 2) epoch'ta bir 10 000 örnekle doğrulama, seed 42, deterministik cuDNN. Template / arama karelerinin
+örneklenmesi, augmentation'lar ve loss'lar orijinal koddakilerle aynıdır.
+
+`init=None` / `"official"` ile aşama 2, **sınıflandırma başlığı çıkarılmış resmi STARK-ST checkpoint'inden**
+başlar. Bu checkpoint'in backbone, transformer ve kutu başlığı resmi aşama-1 ağırlıklarıdır (aşama 2 bunları
+dondurur). Yani bu, aşama 2'yi ayrıca yayımlanmamış resmi aşama-1 modelinden başlatmakla aynıdır.
+`init="<aşama-1 koşu adı>"` ise kendi aşama-1 koşunuzdan başlatır.
+
+### 8.3 Eğitim veri setleri
+
+| `datasets` anahtarı | STARK veri seti | Video / görüntü | Boyut (açılmış) | Hazırlık |
+|---|---|---|---|---|
+| `got10k` | `GOT10K_vottrain`: **VOT ile örtüşen 1000 video çıkarılmış** GOT-10k train | 7 086 video | 73.9 GB (GOT-10k train klasörünün tamamı) | resmi arşivlerden (kayıt gerekir, aşağıya bakın) |
+| `got10k_full` | `GOT10K_train_full`: GOT-10k train'in tamamı (GOT-10k protokolü; `*_got10k_only` config'leri) | 9 335 video | (aynı klasör) | (aynı) |
+| `coco` | `COCO17`: COCO 2017 train; her nesne tek karelik bir "video" | 118 287 görüntü | 19.3 GB (+ 0.8 GB anotasyon) | images.cocodataset.org'dan **otomatik** (19.6 GB zip) |
+| `lasot` | `LASOT` (train bölümü) | 1 120 video | çok büyük | elle: `<train_data>/lasot/<sınıf>/<sınıf>-<n>/` |
+| `trackingnet` | `TRACKINGNET` | ≈ 30 000 video | ≈ 1 TB | elle: `<train_data>/trackingnet/TRAIN_0 ... TRAIN_11/` |
+
+Doğrulama (`val_datasets=["got10k"]`), `GOT10K_vottrain` ile **kesişmeyen** 1 249 GOT-10k train videosundan oluşan
+`GOT10K_votval` bölümünü kullanır (STARK'taki gibi). Bu yüzden yalnızca COCO ile eğitimde bile GOT-10k klasörü
+gerekir; doğrulamasız eğitim için `val_datasets=[]` verin.
+
+**Klasör yapısı** (`train_data`, varsayılan `data/train/`; Colab'de yerel disk `/content/train_data`):
+
+```
+<train_data>/
+├── got10k/train/list.txt, GOT-10k_Train_000001/ ... GOT-10k_Train_009335/
+├── coco/annotations/instances_train2017.json
+├── coco/images/train2017/*.jpg
+├── lasot/ ...                      (elle)
+├── trackingnet/TRAIN_0 ... TRAIN_11 (elle)
+└── _archives/{coco,got10k}/        indirilen arşivler (Colab'de: MyDrive/stark-cls-finetune/train_archives/)
+```
+
+**GOT-10k** ancak [got-10k.aitestunion.com/downloads](http://got-10k.aitestunion.com/downloads) adresinde ücretsiz
+kayıttan sonra indirilebilir; indirme linkleri e-postayla gelir. Linkleri notebook'taki `GOT10K_URLS` listesine
+yazın (CLI: `--got10k-url`) ya da **train** arşivlerini kendiniz indirip `<archives>/got10k/` klasörüne koyun
+(Colab'de: `MyDrive/stark-cls-finetune/train_archives/got10k/`). Hazırlık bu klasördeki tüm arşivleri, arşiv
+içindeki arşivleri de (örn. train split zip'lerini içeren bir `full_data.zip`) açar, 9 335 train videosunun
+tamamının bulunduğunu kontrol eder ve resmi `list.txt` dosyasını alır (yoksa birebir aynısını oluşturur: sıralı
+isimler; `data_specs` bölüm dosyaları bu sıraya göre indeksler).
+
+**COCO** otomatik indirilir (`train2017.zip`, `annotations_trainval2017.zip`); yarıda kalan indirme kaldığı yerden
+devam eder ve 118 287 görüntünün tamamı kontrol edilir.
+
+**Hazırlığın davranışı:** arşivler saklanır (`delete_archives=False`), böylece yeni bir Colab oturumu ya da yeni bir
+makine yalnızca açma işlemini yapar; tamamlanan bir indirme URL'siyle hatırlanır (e-postadaki linklerin süresi
+dolabilir); açma işlemi geçici bir klasöre yapılır ve yalnızca tamamlandığında yeniden adlandırılır (yarıda kalan
+bir hazırlık yarım iş bırakmaz); açmadan önce boş disk alanı kontrol edilir; beklenen yapıya sahip bir veri seti
+klasörü yalnızca okunur, asla değiştirilmez. Zaten açılmış bir GOT-10k kopyası, `<train_data>/got10k/train/list.txt`
+var olacak şekilde `train_data` ayarlanarak doğrudan kullanılabilir.
+
+**Colab'de alan:** Google Drive arşivleri (COCO 19.6 GB, GOT-10k ≈ train arşivlerinin boyutu) ve eğitim koşularını
+(§8.5) tutar; oturumun yerel diski açılmış veri setlerini (GOT-10k + COCO ≈ 94 GB) ve ortamı (≈ 8 GB) tutabilmelidir.
+Disk yetmezse hazırlık, ne kadar alan gerektiğini söyleyen bir mesajla durur.
+
+### 8.4 Parametreler (`TrainConfig`, `stark_ft/training.py`)
+
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `name` | `None` | Koşu klasörünün adı (`<train_outputs>/<name>/`). `None` ise parametrelerden üretilir: model, aşama, veri setleri, `from-<init>`, `e<epochs>`, `r<ratios>`, seed; örn. `st101_stage2_got10k+coco_s42`. |
+| `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) veya `baseline` (STARK-ST50); `model_configs/stark_st1/` (aşama 1) veya `stark_st2/` (aşama 2) altındaki YAML. `*_got10k_only` YAML'ları yalnızca veride farklıdır (onlarla `datasets=["got10k_full"]` kullanın); aşama 2'de `init` olarak resmi GOT-10k-only checkpoint'ini seçerler. |
+| `stage` | `2` | `1` veya `2` (§8.2). |
+| `init` | `None` | Aşama 2: `None` / `"official"` (sınıflandırma başlığı çıkarılmış resmi checkpoint, §8.2), tamamlanmış bir aşama-1 koşusunun adı veya bir checkpoint yolu. Aşama 1: `None` olmalı (ImageNet backbone). |
+| `datasets` | `["got10k"]` | `got10k` (veya `got10k_full`), `coco`, `lasot`, `trackingnet` değerlerinin boş olmayan herhangi bir kombinasyonu. Sıra önemli değildir (STARK'ın sırasına getirilir). |
+| `dataset_ratios` | `None` | Veri seti başına örnekleme ağırlığı (`datasets` ile aynı sırada). `None` = eşit ağırlık (STARK'taki gibi): her eğitim örneği önce bu ağırlıklarla bir veri seti, sonra o veri setinden bir video seçer. |
+| `val_datasets` | `["got10k"]` | `["got10k"]` (GOT10K_votval) veya `[]` (doğrulama yok). |
+| `epochs` | `None` | `None` = orijinal (aşama 1: 500, aşama 2: 50). |
+| `lr_drop_epoch` | `None` | Öğrenme oranının 10'a bölündüğü epoch. `None` = orijinal (400 / 40). |
+| `samples_per_epoch` | `None` | Epoch başına eğitim örneği. `None` = 60 000. |
+| `val_samples_per_epoch` | `None` | Doğrulama örneği sayısı. `None` = 10 000. |
+| `val_interval` | `None` | Kaç epoch'ta bir doğrulama yapılacağı. `None` = orijinal (20 / 10). |
+| `effective_batch` | `128` | Optimizer adımı başına örnek sayısı. **128 = orijinal** (8 GPU × 16). Değiştirmek eğitimi değiştirir. |
+| `micro_batch` | `16` | Bir ileri/geri geçişteki örnek sayısı; her adımda `effective_batch / micro_batch` geçişin gradyanı biriktirilir (§8.6). Yalnızca bellek ve hız buna bağlıdır. |
+| `num_workers` | `8` | Veri yükleme süreçleri. |
+| `seed` | `42` | Seed (STARK varsayılanı). |
+| `keep_every` | `None` | Kaç epoch'ta bir ağırlıkların saklanacağı (`None`: aşama 1: 50, aşama 2: 10). |
+
+### 8.5 Koşu klasörü, devam etme, sonucu kullanma
+
+Her koşu `<train_outputs>/<koşu adı>/` klasörüne yazılır (varsayılan `outputs/training/`; Colab'de
+`MyDrive/stark-cls-finetune/training/`):
+
+| Dosya | İçerik |
+|---|---|
+| `train_config.json` | Tüm parametreler, veri seti klasörleri, başlangıç ağırlıkları, GPU, TF32 ayarı, kod hash'i, tarih |
+| `history.csv` | Epoch başına bir satır: süre, öğrenme oranı, eğitim (ve doğrulama) loss'ları / IoU |
+| `history.png` | `history.csv` grafiği (`nb.show_training` / `train-report` yazar; kesikli çizgiler: LR düşüşleri) |
+| `logs/train.log` | İlerleme çıktısı |
+| `checkpoints/latest.pth.tar` | Son tamamlanan epoch'tan sonraki eksiksiz durum (ağ, optimizer, LR scheduler, rastgele sayı üreteçleri); her epoch atomik olarak yazılır. ST101: ≈ 0.56 GB (aşama 1), ≈ 0.19 GB (aşama 2). |
+| `checkpoints/STARKST_epXXXX.pth.tar` | Her `keep_every` epoch'ta ve sonda ağ ağırlıkları (her biri ≈ 0.19 GB) |
+| `final.pth.tar` | Koşu bittiğinde yazılan son ağırlıklar |
+
+- **Devam etme:** aynı parametreler → koşu `latest.pth.tar` dosyasından devam eder. Devam eden koşu, hiç kesilmemiş
+  bir koşuyla **bit düzeyinde aynıdır** (eğitim sırasında öldürülüp devam ettirilen bir koşuyla doğrulandı). Aynı
+  `name` için farklı parametreler → hata (başka bir `name` veya `overwrite=True` kullanın). Eğitim kodunun
+  (`lib/train`, `lib/models`, `lib/config`, `lib/utils`, `model_configs/stark_st1|2`, `stark_ft/training.py`) farklı bir sürümüyle başlatılmış bir koşu da devam ettirilmez.
+- **Aşama-2 koşusunu değerlendirme:** `01_run_experiment.ipynb` içinde aynı `model_config` ile
+  `checkpoint="train:<koşu adı>"` (aşama-1 koşularının sınıflandırma başlığı eğitilmemiştir; onları aşama 2'nin
+  `init`'i olarak kullanın).
+- **Aşama 1 → aşama 2:** `TrainConfig(stage=2, init="<aşama-1 koşu adı>", ...)`.
+- `checkpoints` klasörüne hiçbir şey yazılmaz.
+
+### 8.6 Sekiz yerine tek GPU: effective batch ve süre
+
+Orijinal model, her birinde 16 örnek olan 8 GPU ile eğitildi; 8 GPU'nun gradyanlarının ortalaması alındığı için her
+optimizer adımı **128** örneğin ortalama gradyanını kullanır. Burada loader `micro_batch` örneklik mikro-batch'ler
+üretir; her birinin loss'u `effective_batch / micro_batch` sayısına bölünür, gradyanlar biriktirilir ve ancak ondan
+sonra gradyan kırpılıp optimizer adımı atılır. STARK backbone'daki tüm BatchNorm katmanlarını dondurduğu için bir
+örneğin ileri geçişi batch'teki diğer örneklere bağlı değildir; dolayısıyla bu, orijinalle **aynı güncellemedir**.
+Sayısal olarak kontrol edildi: 8 × 16 örneğin biriktirilmiş gradyanı ile tek bir 128 örneklik batch'in gradyanı
+float64'te 3·10⁻¹⁵ (bağıl) farklıdır; float32'de ≈ 10⁻⁴, yalnızca toplama sırasından. Epoch başına optimizer adımı
+sayısı da aynıdır (60 000 / 128 = 468; artan örnekler kullanılmaz).
+
+Birebir yeniden üretilemeyen şey rastgele örnek akışıdır: orijinalde her biri kendi veri işçilerine sahip 8 süreç
+vardı. Aynı GPU tipinde aynı parametrelerle (`micro_batch` ve `num_workers` dahil) yapılan koşular bit düzeyinde
+aynıdır; `micro_batch` / `num_workers` değişirse yöntem değil, çekilen rastgele örnekler değişir.
+
+**Süre.** Aşama 1, 500 × 60 000 = 30 M örnek; aşama 2, 50 × 60 000 = 3 M örnek işler. RTX 3060 laptop GPU'da
+ölçülen (`micro_batch=16`): aşama 2 ≈ 35 örnek/sn (≈ 24 saat), aşama 1 ≈ 20 örnek/sn (≈ 17 gün). Veri merkezi
+GPU'ları birkaç kat hızlıdır; ilk adımlardan sonra ilerleme çıktısındaki eğitim ETA'sına bakın. Colab oturumları
+birkaç saat sonra biter, ancak tamamlanan her epoch kaydedilir ve koşu sonraki oturumda devam eder. Colab compute
+unit'leri saat başına harcanır; aşama-1 koşusuna başlamadan önce maliyetine bakın. **TF32:** A100 / L4 (ve RTX
+3000 / 4000 serisi) konvolüsyonlarda varsayılan olarak TF32 kullanır, T4 kullanmaz (bkz. [GPU'lar arası sonuçlar](#gpular-arası-sonuçlar));
+karşılaştırdığınız koşular için aynı GPU tipini kullanın.
+
+### 8.7 Orijinal STARK eğitim kodundan farklar
+
+| Orijinal STARK | Burada |
+|---|---|
+| 8 GPU (DistributedDataParallel), GPU başına 16 örnek | 1 GPU, aynı effective batch'e gradyan biriktirme ile (§8.6) |
+| Veri seti yolları makineye özel bir `local.py` içinde | `train_data` (§2) ve `datasets` parametresi; herhangi bir kombinasyon |
+| Devam ettirilen bir aşama-2 koşusu, devam ettikten **sonra** aşama-1 ağırlıklarını yeniden yüklüyor ve zaten eğitilmiş sınıflandırma başlığını eziyordu | Başlangıç ağırlıkları yalnızca koşu sıfırdan başlarken yüklenir |
+| Checkpoint yalnızca son 10 epoch'ta ve 100 epoch'ta bir, LR scheduler ve rastgele sayı üreteci durumları olmadan yazılıyordu (bir kesinti 99 epoch'a kadar kayba yol açabilirdi) | Her epoch'tan sonra eksiksiz durumla atomik olarak yazılan `latest.pth.tar` + her `keep_every` epoch'ta ağırlıklar; devam etme bit düzeyinde aynı |
+| Checkpoint'lerde pickle'lanmış settings nesneleri | Düz sözlükler |
+| Yeni PyTorch / pandas ile çalışmıyordu (`torch._six`, `storage()._new_shared`, `read_csv(squeeze=True)`) | Davranış değiştirilmeden düzeltildi |
+
+Orijinaldeki gibi bırakılan: aşama 1'de ağ, bir (mikro-)batch'teki herhangi bir örnek için geçersiz bir kutu
+(x2 < x1 veya y2 < y1) tahmin ederse GIoU hesabı başarısız olur ve STARK o batch'in tamamının GIoU loss'unu 0 sayar
+(yalnızca L1 loss kullanılır). Bu, sıfırdan eğitimin en başında olur (ilk adımlarda örneklerin ≈ 8'de 1'i geçersizdir)
+ve hızla kaybolur. Burada mikro-batch başına uygulanır (varsayılan 16 örnek; orijinalde 8 GPU'nun her birindekiyle
+aynı).
+
+## 9. Komut satırı (CLI)
 
 Notebook'lar bu komutları çağırır; doğrudan da kullanılabilir (`vot1` ortamında, depo kökünde):
 
@@ -382,13 +568,19 @@ python -m stark_ft list
 python -m stark_ft compare <deney1> <deney2> --out comparison.xlsx --plot comparison.png
 python -m stark_ft download-checkpoints --model stark_st --model-config baseline_R101 baseline
 python -m stark_ft download-dataset
+python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL ...] [--archives KLASÖR]
+python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --dry-run   # kontrol; sonra --dry-run olmadan
+python -m stark_ft train-report <koşu adı>                 # ilerleme + history.png
+python -m stark_ft train-list
 python -m tests.test_sampling                              # negatif örnek geometrisi testleri
 python -m tests.test_config                                # parametre okuma / doğrulama testleri
+python -m tests.test_training                              # eğitim parametreleri testleri
+python -m tests.test_train_data                            # eğitim verisi hazırlığı testleri
 ```
 
 `--set` değerleri YAML olarak yorumlanır: `1e-4` → sayı, `true` → bool, `[a, b]` → liste.
 
-## 9. Sık karşılaşılan sorunlar
+## 10. Sık karşılaşılan sorunlar
 
 | Belirti | Çözüm |
 |---|---|
@@ -401,8 +593,13 @@ python -m tests.test_config                                # parametre okuma / d
 | "A newer version of the VOT toolkit is available" | Görmezden gelin; depo vot-toolkit **0.5.3** ile test edilmiştir. Güncellemeyin. |
 | Colab: `WARNING: no GPU in this session` | *Runtime → Change runtime type → GPU* seçip ilk hücreyi tekrar çalıştırın. |
 | Colab: Drive'a arşivleme başarısız | Google Drive'da yeterli yer yok (≈ 26 GB gerekir). Yer açıp ilk hücreyi tekrar çalıştırın; tamamlanan adımlar tekrarlanmaz. |
+| Eğitim: `CUDA out of memory` | `micro_batch` değerini düşürün (örn. 8) ve `effective_batch=128` olarak bırakın: güncelleme aynı kalır (§8.6). |
+| Eğitim: oturum / makine çöküyor ya da RAM yetmiyor | `num_workers` değerini düşürün (COCO'nun anotasyon dosyası büyüktür ve her veri işçisi bellek kullanır). Colab'de High-RAM oturumu kullanın. |
+| Eğitim: `Not enough disk space for ...` | Açılmış veri setleri yerel diske sığmıyor (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Daha büyük diskli bir makine / oturum ya da daha az veri seti kullanın. |
+| Eğitim: `No GOT-10k archives in ...` | GOT-10k sitesine kaydolup e-postayla gelen linkleri `GOT10K_URLS` listesine yazın veya arşivleri mesajda belirtilen klasöre koyun (§8.3). |
+| Eğitim: `... already exists with different parameters` / `different version of the training code` | Deneylerdeki gibi: başka bir `name` ya da sıfırdan koşu için `overwrite=True` kullanın. |
 
-## 10. Bilinen sınırlamalar ve açık konular
+## 11. Bilinen sınırlamalar ve açık konular
 
 - **`pos` modu skoru genel olarak şişirir.** Tek etiket "1" iken BCE'nin en kolay çözümü çıktıyı her girdi için
   büyütmektir. AdamW gradyanı normalize ettiği için loss çok küçükken bile her adım ≈ `ft_lr` kadar ilerler.
@@ -416,6 +613,10 @@ python -m tests.test_config                                # parametre okuma / d
 - **`ft_lr` / `ft_epochs_*` için teorik bir seçim yöntemi yok.** Değerler deneyseldir. Hiperparametreleri test
   dizileri üzerinde seçmenin sonuçları iyimser göstereceğini unutmayın.
 - **vot-toolkit her dizi için tracker sürecini yeniden başlatır** (model her dizide yeniden yüklenir, ~3–4 sn).
+- **Eğitim: LaSOT ve TrackingNet otomatik hazırlanmaz.** Eğitim kodu bunları destekler (`datasets=["lasot", ...]`),
+  ancak `<train_data>/lasot/` ve `<train_data>/trackingnet/` klasörlerine elle indirilip açılmaları gerekir
+  (Colab oturumu için çok büyüktürler).
+- **Eğitim: tam bir aşama-1 koşusu uzundur** (30 M örnek; RTX 3060 laptop GPU'da ≈ 17 gün), bkz. §8.6.
 
 ### GPU'lar arası sonuçlar
 
@@ -439,7 +640,7 @@ Baseline bundan etkilenmiyor, online fine-tune ise etkileniyor: bu dizide iki ko
 **Bu yüzden birbiriyle karşılaştırılan tüm deneyleri aynı GPU tipinde koşun ve GPU'yu raporlayın.** Seed'ler tek
 başına bu değişkenliği yakalamaz.
 
-## 11. Eski koddan farklar ve düzeltilen hatalar
+## 12. Eski koddan farklar ve düzeltilen hatalar
 
 Bu depo, eski çalışma dizinindeki (`Stark/`) kodun düzenlenmiş halidir. Eski dizin değiştirilmemiştir.
 
@@ -459,7 +660,9 @@ Bu depo, eski çalışma dizinindeki (`Stark/`) kodun düzenlenmiş halidir. Esk
 **Doğrulamalar:** `ft_mode="none"` ile tracker çıktısı eski `STARK_ST` ile 150 karede bit düzeyinde aynıdır
 (aynı checkpoint ile). STARK-S de eski kodla aynı sonucu verir.
 
-## 12. Lisans ve atıf
+Orijinal STARK **eğitim** kodundan farklar [§8.7](#87-orijinal-stark-eğitim-kodundan-farklar)'de listelenmiştir.
+
+## 13. Lisans ve atıf
 
 STARK (ICCV2021):
 

@@ -37,7 +37,7 @@ class ExperimentConfig:
     # ---- Model ----
     model: str = "stark_st"               # "stark_st" (STARK-ST, with confidence) | "stark_s" (STARK-S, no confidence)
     model_config: str = "baseline_R101"   # model_configs/<stark_st2|stark_s>/<name>.yaml
-    checkpoint: Optional[str] = None      # None: <PREFIX>_ep<EPOCH>.pth.tar; a file name or a path can be given
+    checkpoint: Optional[str] = None      # None: <PREFIX>_ep<EPOCH>.pth.tar; a file name, a path or "train:<run name>"
 
     # ---- Data ----
     sequences: Union[str, List[str]] = "all"  # "all" or ["bull", "ballet", ...]
@@ -120,6 +120,9 @@ class ExperimentConfig:
 
     def checkpoint_path(self, paths: Paths) -> Path:
         ckpt = self.checkpoint or self.default_checkpoint_name()
+        if ckpt.startswith("train:"):
+            # Weights of a training run of this repository (stark_ft/training.py)
+            return paths.train_outputs / ckpt[len("train:"):] / "final.pth.tar"
         if "/" in ckpt or "\\" in ckpt:
             # A path was given: absolute as is, relative to the repository root otherwise
             p = Path(ckpt).expanduser()
@@ -135,7 +138,7 @@ class ExperimentConfig:
         if "got10k_only" in self.model_config:
             base += "got"
         if self.checkpoint:
-            base += "-" + Path(self.checkpoint).name.split(".")[0]
+            base += "-" + Path(self.checkpoint.replace("train:", "")).name.split(".")[0]
         return base
 
     def auto_name(self) -> str:

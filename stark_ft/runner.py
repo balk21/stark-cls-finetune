@@ -30,6 +30,7 @@ VOT_RESULTS_SUBDIR = Path("results") / TRACKER_ID / "longterm"
 # Code that determines the tracker output. If it changes, an experiment must not be resumed: completed sequences
 # (skipped by vot-toolkit, which is why `vot evaluate` runs without -f) would come from the old code.
 TRACKING_CODE = ("lib", "model_configs", "stark_ft/vot_entry.py", "stark_ft/tracker_factory.py", "stark_ft/vot_trax.py")
+TRACKING_EXCLUDE = ("lib/train", "lib/config/stark_st1", "model_configs/stark_st1")  # training only
 
 
 class ExperimentExistsError(RuntimeError):
@@ -51,6 +52,9 @@ def tracking_code_hash() -> str:
         root = REPO_ROOT / entry
         files = sorted(root.rglob("*")) if root.is_dir() else [root]
         for f in files:
+            rel = f.relative_to(REPO_ROOT).as_posix()
+            if any(rel == e or rel.startswith(e + "/") for e in TRACKING_EXCLUDE):
+                continue
             if f.is_file() and f.suffix in (".py", ".yaml"):
                 h.update(str(f.relative_to(REPO_ROOT)).encode())
                 h.update(f.read_bytes().replace(b"\r\n", b"\n"))

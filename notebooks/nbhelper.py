@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_NAME = "vot1"
 OUTPUT_DIR_MARKER = "OUTPUT_DIR="  # printed by `python -m stark_ft run`
 _PATHS_CACHE = {}
+_COLAB_INFO = {}  # result of the last colab_bootstrap() in this kernel
 
 _CANDIDATE_PREFIXES = [
     "~/anaconda3", "~/miniconda3", "~/miniforge3", "~/mambaforge", "~/micromamba",
@@ -72,6 +73,7 @@ def colab_bootstrap(**kwargs) -> dict:
     from colab_setup import bootstrap
     info = bootstrap(**kwargs)
     _PATHS_CACHE.clear()
+    _COLAB_INFO.update(info)
     return info
 
 
@@ -84,7 +86,10 @@ def python():
 
 
 # ------------------------------------------------------------------ subprocesses
-def stream(cmd, cwd=REPO_ROOT, env=None, check=True):
+RESUME_NOTE = "Running the same experiment again skips the completed sequences."
+
+
+def stream(cmd, cwd=REPO_ROOT, env=None, check=True, stop_note=RESUME_NOTE):
     """Runs a command and streams its output live into the notebook. If the cell is interrupted, the whole
     process group is terminated."""
     full_env = os.environ.copy()
@@ -108,15 +113,15 @@ def stream(cmd, cwd=REPO_ROOT, env=None, check=True):
         time.sleep(2)
         if proc.poll() is None:
             os.killpg(proc.pid, signal.SIGKILL)
-        print("\n>>> Stopped. Running the same experiment again skips the completed sequences.")
+        print(f"\n>>> Stopped. {stop_note}")
         raise
     if check and rc != 0:
         raise RuntimeError(f"Command failed (exit code {rc}). See the error message above.")
     return "".join(captured)
 
 
-def _cli(*args, check=True):
-    return stream([python(), "-m", "stark_ft", *args], check=check)
+def _cli(*args, check=True, stop_note=RESUME_NOTE):
+    return stream([python(), "-m", "stark_ft", *args], check=check, stop_note=stop_note)
 
 
 def cli(*args, check=True):
@@ -125,7 +130,8 @@ def cli(*args, check=True):
 
 
 def paths() -> dict:
-    """Paths resolved from configs/paths*.yaml and environment variables (checkpoints, dataset, outputs)."""
+    """Paths resolved from configs/paths*.yaml and environment variables (checkpoints, dataset, outputs,
+    train_data, train_outputs)."""
     if not _PATHS_CACHE:
         out = subprocess.check_output(
             [python(), "-c", "import json; from stark_ft.paths import get_paths; print(json.dumps(get_paths().as_dict()))"],
@@ -261,3 +267,92 @@ def show_side_by_side(names, sequence, kind="iou_conf"):
             display(Image(filename=str(img)))
         else:
             print(f"  (missing: {img})")
+
+
+# ------------------------------------------------------------------ training
+TRAIN_RESUME_NOTE = "Running the same training again resumes from the last finished epoch."
+
+
+def _train_config_file(params: dict) -> Path:
+    config_dir = Path(paths()["train_outputs"]) / "_notebook_configs"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    path = config_dir / f"train_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.json"
+    path.write_text(json.dumps(params, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def training_datasets(params: dict):
+    """Datasets a training run reads (training + validation)."""
+    return sorted(set(params.get("datasets", ["got10k"])) | set(params.get("val_datasets", ["got10k"])))
+
+
+def prepare_training_data(datasets, got10k_urls=(), archives=None, delete_archives=False):
+    """Downloads / extracts the training datasets ("got10k", "coco") into `train_data`. On Colab the archives are
+    kept on Google Drive (<drive_root>/train_archives), so later sessions only extract them."""
+    archives = archives or _COLAB_INFO.get("train_archives")
+    args = ["prepare-train-data", "--datasets", *datasets]
+    if archives:
+        args += ["--archives", archives]
+    for url in got10k_urls:
+        args += ["--got10k-url", url]
+    if delete_archives:
+        args.append("--delete-archives")
+    cli(*args)
+
+
+def setup_training(params: dict, got10k_urls=(), **bootstrap_kwargs) -> dict:
+    """Everything a training run needs: on Colab the session (environment, checkpoint, paths; no VOT dataset),
+    then the training datasets. Returns the dry-run information of the run."""
+    if in_colab():
+        official = params.get("stage", 2) == 2 and params.get("init") in (None, "official")
+        ckpts = (("stark_st", params.get("model_config", "baseline_R101")),) if official else ()
+        bootstrap_kwargs.setdefault("vot_dataset", False)
+        colab_bootstrap(checkpoints=ckpts, **bootstrap_kwargs)
+    prepare_training_data(training_datasets(params), got10k_urls)
+    return describe_training(params)
+
+
+def describe_training(params: dict) -> dict:
+    """Validates the training parameters and shows what the run would do (folder, epochs, datasets, init)."""
+    cli("train", "--config", _train_config_file(params), "--dry-run", check=False)
+    try:
+        return _training_info(params)
+    except RuntimeError:
+        return {}
+
+
+def _training_info(params: dict) -> dict:
+    out = subprocess.run([python(), "-m", "stark_ft", "train", "--config", str(_train_config_file(params)),
+                          "--json"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    try:
+        return json.loads(out.stdout.strip().splitlines()[-1])
+    except Exception:  # noqa: BLE001
+        raise RuntimeError(f"Invalid training parameters:\n{out.stderr[-2000:]}") from None
+
+
+def train(params: dict, overwrite=False) -> Path:
+    """Trains (or resumes) the run and returns its folder."""
+    args = ["train", "--config", _train_config_file(params)]
+    if overwrite:
+        args.append("--overwrite")
+    text = _cli(*args, stop_note=TRAIN_RESUME_NOTE)
+    for line in reversed(text.splitlines()):
+        if line.startswith(OUTPUT_DIR_MARKER):
+            return Path(line[len(OUTPUT_DIR_MARKER):].strip())
+    raise RuntimeError("Run folder not found (check the output above).")
+
+
+def show_training(run):
+    """Progress, last losses and the history plot of a training run (run name, folder or the params dict)."""
+    from IPython.display import Image, display
+    if isinstance(run, dict):
+        run = _training_info(run)["run_name"]
+    cli("train-report", run)
+    img = Path(paths()["train_outputs"]) / str(run) / "history.png"
+    img = img if img.is_file() else Path(str(run)) / "history.png"
+    if img.is_file():
+        display(Image(filename=str(img)))
+
+
+def list_training_runs():
+    cli("train-list")

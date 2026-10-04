@@ -8,18 +8,24 @@ checkpoints. `bootstrap()` is idempotent: it only does what is missing in the cu
     - installs micromamba and creates the `vot1` environment from environment/vot1_environment.yml
       (exactly the same packages as on Vast.ai / a local conda machine), then caches it on Google Drive;
     - downloads the official checkpoint(s) to Drive;
-    - downloads the VOT-LT2020 dataset and caches it on Drive as a single tar file.
+    - downloads the VOT-LT2020 dataset and caches it on Drive as a single tar file (skipped with
+      vot_dataset=False, e.g. in training sessions).
   Later sessions (a few minutes):
     - restores the environment and the dataset from the Drive caches to the local disk.
+  Training datasets (03_train.ipynb) are prepared separately with `python -m stark_ft prepare-train-data`; their
+  archives are kept on Drive (<drive_root>/train_archives) and extracted to the local disk in every session.
 
 Layout:
   <drive_root>/cache/vot1_env_<hash>.tar        cached conda environment (~7.5 GB)
   <drive_root>/cache/votlt2020_sequences.tar    cached dataset (~17 GB)
   <drive_root>/checkpoints/...                  checkpoints (same layout as checkpoints/ in the repository)
   <drive_root>/outputs/                         experiment outputs (persist across sessions, so runs can resume)
+  <drive_root>/train_archives/{coco,got10k}/    training dataset archives (COCO ~19.6 GB; GOT-10k: see README)
+  <drive_root>/training/                        training runs (persist across sessions, so training can resume)
   <local_root>/micromamba/envs/vot1/            the environment (local disk)
   <local_root>/data/votlt2020/sequences/        the dataset (local disk; reading 200k images from Drive is too slow)
   <local_root>/checkpoints/                     local copy of the Drive checkpoints
+  <local_root>/train_data/                      extracted training datasets (local disk)
 """
 import hashlib
 import os
@@ -208,18 +214,19 @@ def check_gpu(python: Path) -> bool:
     return ok
 
 
-def write_paths(checkpoints: Path, dataset: Path, outputs: Path):
+def write_paths(**paths):
+    """Writes configs/paths.local.yaml (keys of stark_ft/paths.py; None values are left out)."""
     path = REPO_ROOT / "configs" / "paths.local.yaml"
-    path.write_text("# Written by notebooks/colab_setup.py (Google Colab session)\n"
-                    f"checkpoints: {checkpoints}\n"
-                    f"dataset: {dataset}\n"
-                    f"outputs: {outputs}\n")
+    lines = ["# Written by notebooks/colab_setup.py (Google Colab session)"]
+    lines += [f"{k}: {v}" for k, v in paths.items() if v is not None]
+    path.write_text("\n".join(lines) + "\n")
     return path
 
 
 def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoints=DEFAULT_CHECKPOINTS,
-              download_dataset=True, rebuild_env=False) -> dict:
-    """Prepares the current Colab session. Safe to call in every notebook; only missing steps are executed."""
+              download_dataset=True, rebuild_env=False, vot_dataset=True) -> dict:
+    """Prepares the current Colab session. Safe to call in every notebook; only missing steps are executed.
+    vot_dataset=False skips the VOT-LT2020 dataset (not needed for training)."""
     t0 = time.time()
     if mount is None:
         mount = in_colab()
@@ -235,9 +242,16 @@ def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoi
     python = setup_environment(drive_root, local_root, rebuild=rebuild_env)
     gpu_ok = check_gpu(python)
     ckpt = setup_checkpoints(drive_root, local_root, checkpoints)
-    dataset = setup_dataset(drive_root, local_root, python, download=download_dataset)
-    paths_file = write_paths(ckpt, dataset, drive_root / "outputs")
+    if vot_dataset:
+        dataset = setup_dataset(drive_root, local_root, python, download=download_dataset)
+    else:  # keep a dataset restored earlier in this session in paths.local.yaml
+        seq_dir = local_root / "data" / "votlt2020" / "sequences"
+        dataset = seq_dir if _dataset_ready(seq_dir) else None
+    info = {"checkpoints": ckpt, "dataset": dataset, "outputs": drive_root / "outputs",
+            "train_data": local_root / "train_data", "train_outputs": drive_root / "training"}
+    paths_file = write_paths(**info)
     os.environ["VOT1_PYTHON"] = str(python)  # used by nbhelper.python()
     _log(f"Session ready in {time.time() - t0:.0f} s. Paths: {paths_file}")
-    return {"python": str(python), "checkpoints": str(ckpt), "dataset": str(dataset),
-            "outputs": str(drive_root / "outputs"), "gpu": gpu_ok}
+    info = {k: (str(v) if v is not None else None) for k, v in info.items()}
+    info.update(python=str(python), gpu=gpu_ok, train_archives=str(drive_root / "train_archives"))
+    return info

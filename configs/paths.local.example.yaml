@@ -3,3 +3,5 @@
 # checkpoints: /home/user/stark_checkpoints
 # dataset: /data/vot/votlt2020/sequences
 # outputs: /data/stark_outputs
+# train_data: /data/tracking_train_sets
+# train_outputs: /data/stark_training
