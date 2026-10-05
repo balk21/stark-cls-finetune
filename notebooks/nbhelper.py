@@ -69,7 +69,7 @@ def in_colab() -> bool:
 
 
 def colab_bootstrap(**kwargs) -> dict:
-    """Prepares a Google Colab session (environment, checkpoints, dataset, paths). See colab_setup.bootstrap."""
+    """Prepares a Google Colab session (environment, checkpoints, paths). See colab_setup.bootstrap."""
     import importlib
     import colab_setup
     info = importlib.reload(colab_setup).bootstrap(**kwargs)  # reload: the code may have changed (git pull)
@@ -303,12 +303,11 @@ def prepare_training_data(datasets, got10k_urls=(), archives=None, delete_archiv
 
 
 def setup_training(params: dict, got10k_urls=(), **bootstrap_kwargs) -> dict:
-    """Everything a training run needs: on Colab the session (environment, checkpoint, paths; no VOT dataset),
-    then the training datasets. Returns the dry-run information of the run."""
+    """Everything a training run needs: on Colab the session (environment, checkpoint, paths), then the training
+    datasets. Returns the dry-run information of the run."""
     if in_colab():
         official = params.get("stage", 2) == 2 and params.get("init") in (None, "official")
         ckpts = (("stark_st", params.get("model_config", "baseline_R101")),) if official else ()
-        bootstrap_kwargs.setdefault("vot_dataset", False)
         colab_bootstrap(checkpoints=ckpts, **bootstrap_kwargs)
     prepare_training_data(training_datasets(params), got10k_urls)
     return describe_training(params)

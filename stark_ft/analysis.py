@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from stark_ft import vot_data
 from stark_ft.config import ExperimentConfig
 from stark_ft.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, iou, operating_point,
                                  read_groundtruth, read_vot_result)
@@ -72,6 +73,9 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
     thr_resolution = cfg.eval_thr_resolution if thr_resolution is None else thr_resolution
     dataset = _dataset_dir(meta, paths)
     exp_name = meta["experiment_name"]
+    # Ground truth of the sequences with results, e.g. in a new Colab session: restored from Drive or downloaded
+    with_results = [s for s in meta["sequences"] if (out_dir / "predictions" / s / f"{s}_001.txt").is_file()]
+    vot_data.ensure(with_results, dataset, paths.dataset_cache)
 
     # ---- pass 1: per-sequence metrics (fixed threshold) ----
     per_seq, all_records, seq_records, plot_data, skipped = [], [], {}, {}, []

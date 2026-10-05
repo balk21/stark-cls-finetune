@@ -9,7 +9,7 @@ Command-line interface. The notebooks call this interface as well, using the vot
     python -m stark_ft list
     python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
     python -m stark_ft download-checkpoints [--model stark_st] [--model-config baseline_R101 ...]
-    python -m stark_ft download-dataset
+    python -m stark_ft download-dataset [--sequences all | bull ballet ...]
     python -m stark_ft train   [--config train.yaml] [--set key=value ...] [--overwrite] [--dry-run]
     python -m stark_ft train-report <run name or folder> [--no-plot] [--json]
     python -m stark_ft train-list
@@ -48,6 +48,7 @@ def _add_config_args(p):
 
 
 def cmd_show(args):
+    from stark_ft import vot_data
     from stark_ft.paths import get_paths
     from stark_ft.runner import resolve_sequences
     cfg = _build_config(args)
@@ -62,7 +63,8 @@ def cmd_show(args):
         "config": cfg.to_dict(),
     }
     try:
-        info["sequences"] = resolve_sequences(cfg, paths)
+        info["sequences"] = resolve_sequences(cfg, paths, fetch=False)
+        info["to_download"] = vot_data.missing(info["sequences"], paths.dataset)
     except Exception as e:  # noqa: BLE001
         info["sequences_error"] = str(e)
     if args.json:
@@ -75,6 +77,10 @@ def cmd_show(args):
     if "sequences" in info:
         seqs = info["sequences"]
         print(f"Sequences   : {len(seqs)} -> {', '.join(seqs[:8])}{' ...' if len(seqs) > 8 else ''}")
+        todo = info["to_download"]
+        if todo:
+            print(f"Download    : {len(todo)} sequence(s) not on disk yet ({vot_data.size_text(todo)}), "
+                  "fetched when the run starts")
     else:
         print(f"Sequences   : ERROR - {info['sequences_error']}")
     print("Parameters:")
@@ -218,7 +224,9 @@ def main(argv=None):
     p.add_argument("--model", default="stark_st", choices=["stark_st", "stark_s"])
     p.add_argument("--model-config", nargs="+", default=["baseline_R101"])
     p.add_argument("--force", action="store_true")
-    sub.add_parser("download-dataset", help="Download the VOT-LT2020 sequences")
+    p = sub.add_parser("download-dataset", help="Download VOT-LT2020 sequences (experiments also download the "
+                                                "sequences they need)")
+    p.add_argument("--sequences", nargs="+", default=["all"], help="'all' (default, 17.6 GB) or sequence names")
     p = sub.add_parser("train", help="Train STARK-ST (stage 1 or 2) on a combination of datasets")
     _add_config_args(p)
     p.add_argument("--overwrite", action="store_true")
@@ -285,7 +293,7 @@ def main(argv=None):
         return 0
     if args.cmd == "download-dataset":
         from stark_ft.setup_utils import download_dataset
-        download_dataset()
+        download_dataset(sequences="all" if args.sequences == ["all"] else args.sequences)
         return 0
 
 

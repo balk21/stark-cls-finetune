@@ -22,8 +22,9 @@ from pathlib import Path
 
 import yaml
 
+from stark_ft import vot_data
 from stark_ft.config import ExperimentConfig
-from stark_ft.paths import REPO_ROOT, Paths, get_paths, list_sequences
+from stark_ft.paths import REPO_ROOT, Paths, get_paths
 
 TRACKER_ID = "stark_clean"
 VOT_RESULTS_SUBDIR = Path("results") / TRACKER_ID / "longterm"
@@ -61,18 +62,13 @@ def tracking_code_hash() -> str:
     return h.hexdigest()[:12]
 
 
-def resolve_sequences(cfg: ExperimentConfig, paths: Paths):
-    available = list_sequences(paths.dataset)
-    if not available:
-        raise FileNotFoundError(
-            f"No VOT sequences found in the dataset folder: {paths.dataset}\n"
-            "Download the dataset with 00_setup.ipynb or set the 'dataset' path in configs/paths.local.yaml.")
-    if cfg.sequences == "all":
-        return available
-    missing = [s for s in cfg.sequences if s not in available]
-    if missing:
-        raise ValueError(f"Sequence(s) not in the dataset: {missing}\nAvailable sequences: {available}")
-    return list(cfg.sequences)
+def resolve_sequences(cfg: ExperimentConfig, paths: Paths, fetch: bool = True):
+    """The experiment's sequences. Sequences that are not in the dataset folder yet are downloaded (or restored
+    from the dataset cache) unless fetch=False."""
+    sequences = vot_data.resolve(cfg.sequences, paths.dataset)
+    if fetch:
+        vot_data.ensure(sequences, paths.dataset, paths.dataset_cache)
+    return sequences
 
 
 def _stack_definition(cfg: ExperimentConfig) -> dict:
@@ -180,7 +176,7 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
         raise FileNotFoundError(
             f"Checkpoint not found: {checkpoint}\n"
             "Download it with 00_setup.ipynb, put the file at this location, or pass a path via `checkpoint`.")
-    sequences = resolve_sequences(cfg, paths)
+    sequences = resolve_sequences(cfg, paths, fetch=False)
 
     out_dir = paths.outputs / cfg.experiment_name
     meta_path = out_dir / "experiment.json"
@@ -197,20 +193,22 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
                 old_cfg = None
             same = old_cfg == cfg.tracking_dict() and old.get("checkpoint") == str(checkpoint)
             old_code = old.get("code_hash")
-        if overwrite:
-            if paths.outputs.resolve() not in out_dir.resolve().parents:
-                raise RuntimeError(f"Safety check: {out_dir} is not inside the outputs folder; not deleted")
-            shutil.rmtree(out_dir)
-        elif not same:
+        if not overwrite and not same:
             raise ExperimentExistsError(
                 f"'{out_dir}' already exists with different parameters.\n"
                 "Use a different `name`, or overwrite=True to delete the old results.")
-        elif old_code is not None and old_code != code_hash:
+        if not overwrite and old_code is not None and old_code != code_hash:
             raise ExperimentExistsError(
                 f"'{out_dir}' was started with a different version of the tracking code "
                 f"({old_code} -> {code_hash}).\nResuming would mix results of two code versions. "
                 "Use overwrite=True for a fresh run, or a different `name`.")
 
+    # Missing sequences are downloaded only now: after the checks above, before old results are deleted
+    vot_data.ensure(sequences, paths.dataset, paths.dataset_cache)
+    if overwrite and out_dir.exists():
+        if paths.outputs.resolve() not in out_dir.resolve().parents:
+            raise RuntimeError(f"Safety check: {out_dir} is not inside the outputs folder; not deleted")
+        shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     meta = {
         "config": cfg.to_dict(),

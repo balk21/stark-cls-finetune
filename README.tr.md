@@ -41,7 +41,7 @@ Vast.ai sunucusunda, Google Colab'de ve kişisel bilgisayarda çalışır.
 |---|---|
 | GPU | NVIDIA **RTX 3000 / 4000 serisi** (test edilen). RTX 5000 serisi (Blackwell) ortamdaki PyTorch 2.4.1 ile **çalışmaz**. |
 | GPU belleği | ≥ 8 GB |
-| Disk | ≥ 40 GB (veri seti ≈ 17 GB + conda ortamı + çıktılar) |
+| Disk | ≥ 40 GB (conda ortamı + çıktılar + kullandığınız VOT dizileri; 50 dizinin tamamı: 17,6 GB) |
 | Yazılım | `conda` içeren bir imaj (örn. Vast.ai'ın conda'lı PyTorch şablonları) ve Jupyter |
 
 **Adımlar**
@@ -52,7 +52,8 @@ Vast.ai sunucusunda, Google Colab'de ve kişisel bilgisayarda çalışır.
    git clone https://github.com/balk21/stark-cls-finetune.git
    ```
 3. `notebooks/00_setup.ipynb` dosyasını açın ve hücreleri sırayla çalıştırın:
-   `vot1` ortamı kurulur, checkpoint ve veri seti indirilir, kısa bir duman testi yapılır.
+   `vot1` ortamı kurulur, checkpoint indirilir ve kısa bir duman testi yapılır (bunun için tek bir dizi, `ballet`,
+   57 MB, indirilir). Diğer VOT dizileri bir deney onları ilk kullandığında indirilir (§2).
 4. `notebooks/01_run_experiment.ipynb` dosyasında parametreleri düzenleyip deneyi çalıştırın.
 5. `notebooks/02_compare.ipynb` ile deneyleri karşılaştırın.
 6. İsteğe bağlı: STARK-ST'nin kendisini `notebooks/03_train.ipynb` ile eğitin (bkz. [§8](#8-stark-st-eğitimi-base-training)).
@@ -81,14 +82,14 @@ kullanın.
 |---|---|---|
 | `vot1` ortamı | kurulur (~5–10 dk), Drive'a arşivlenir (`cache/vot1_env_<hash>.tar`, 7.8 GB) | geri yüklenir (~1–3 dk) |
 | Checkpoint | Drive'a indirilir (`checkpoints/`) | kopyalanır (saniyeler) |
-| VOT-LT2020 veri seti | indirilir (20–60 dk), Drive'a arşivlenir (`cache/votlt2020_sequences.tar`, 17 GB) | geri yüklenir (birkaç dk) |
+| VOT-LT2020 dizileri | bir deney ilk kullandığında yalnızca o diziler indirilir (örn. `bull` 58 MB; 50 dizinin tamamı: 17,6 GB) ve Drive'a kopyalanır (`cache/votlt2019_sequences/<dizi>.tar`) | bir deney kullandığında Drive'dan geri yüklenir |
 | Çıktılar | Drive'a yazılır (`outputs/`) | korunur; yarıda kalan koşular devam ettirilebilir |
 
-**Gereken Google Drive alanı:** ≈ 26 GB + deney çıktıları. Kendi checkpoint'lerinizi
+**Gereken Google Drive alanı:** ≈ 8 GB + kullandığınız diziler (tamamı: 17,6 GB) + deney çıktıları. Kendi checkpoint'lerinizi
 `MyDrive/LOKAP/checkpoints/<stark_st2|stark_s>/<model_config>/` altına yükleyebilirsiniz.
 
 **Colab'de eğitim:** `03_train.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb)
-notebook'unu doğrudan açın; VOT veri setine ihtiyaç duymaz (bkz. [§8](#8-stark-st-eğitimi-base-training)).
+notebook'unu doğrudan açın; VOT dizilerine ihtiyaç duymaz (bkz. [§8](#8-stark-st-eğitimi-base-training)).
 
 ## 2. Kendi bilgisayarınızda
 
@@ -98,25 +99,36 @@ Aynı notebook'lar kullanılır. Checkpoint veya veri seti zaten başka bir yerd
 ```yaml
 checkpoints: /home/kullanici/stark/checkpoints/train   # <checkpoints>/stark_st2/baseline_R101/STARKST_ep0050.pth.tar
 dataset: /home/kullanici/vot/votlt2020/sequences        # <dataset>/<dizi>/{color/, groundtruth.txt, sequence}
+dataset_cache: /veri/vot_dizi_arsivleri                 # isteğe bağlı: indirilen her dizinin bir kopyası (<dizi>.tar)
 outputs: /home/kullanici/stark_outputs
 train_data: /veri/tracking_train                        # yalnızca eğitim: <train_data>/{got10k/train, coco, ...} (§8.3)
 train_outputs: /home/kullanici/stark_training           # yalnızca eğitim: her eğitim koşusu için bir klasör (§8.5)
 ```
 
-Bu dosya git'e girmez. Aynı ayarlar `STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET`, `STARK_CLEAN_OUTPUTS`,
-`STARK_CLEAN_TRAIN_DATA` ve `STARK_CLEAN_TRAIN_OUTPUTS` ortam değişkenleriyle de verilebilir (öncelik: ortam
-değişkeni > `paths.local.yaml` > `paths.yaml`).
+Bu dosya git'e girmez. Aynı ayarlar `STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET`, `STARK_CLEAN_DATASET_CACHE`,
+`STARK_CLEAN_OUTPUTS`, `STARK_CLEAN_TRAIN_DATA` ve `STARK_CLEAN_TRAIN_OUTPUTS` ortam değişkenleriyle de verilebilir
+(öncelik: ortam değişkeni > `paths.local.yaml` > `paths.yaml`).
 
-Veri seti klasörüne **hiçbir dosya yazılmaz**. VOT-toolkit'in ihtiyaç duyduğu `list.txt`, her deneyin kendi
-`vot_workspace/` klasöründe, dizilerin mutlak yollarıyla oluşturulur.
+**VOT dizileri gerektiğinde indirilir.** Önceden bir şey indirmek gerekmez. Bir deney başladığında, kullandığı ve
+`dataset` klasöründe henüz olmayan diziler resmi VOT sunucusundan tek tek indirilir (VOT-LT2020 stack'inin kullandığı
+VOT-LT2019 dizileri), resmi SHA-1 sağlama toplamlarıyla kontrol edilir ve vot-toolkit'in yazdığıyla birebir aynı
+dosyalar olarak yazılır. `sequences=["bull"]` yalnızca bull'u indirir (58 MB); `"all"` 50 dizinin tamamını indirir
+(17,6 GB, 20–60 dk). `show` / `nb.describe` neyin indirileceğini önceden gösterir. Önceden indirmek için:
+`python -m stark_ft download-dataset [--sequences bull ballet]` (`--sequences` olmadan: 50 dizinin tamamı).
+`dataset_cache` tanımlıysa indirilen her dizinin bir kopyası (`<dizi>.tar`) orada tutulur ve başka bir makinede
+sunucu yerine oradan alınır; Colab'de bu, Drive'daki `cache/votlt2019_sequences/` klasörüdür.
+
+**Mevcut diziler yalnızca okunur.** Veri seti klasörüne yalnızca eksik olup indirilen diziler yazılır.
+VOT-toolkit'in bir deney için ihtiyaç duyduğu `list.txt`, deneyin kendi `vot_workspace/` klasöründe, dizilerin mutlak
+yollarıyla oluşturulur.
 
 ## 3. Klasör yapısı
 
 ```
 stark-cls-finetune/
 ├── notebooks/
-│   ├── 00_setup.ipynb            Conda'lı makinede kurulum (ortam, checkpoint, veri seti, duman testi)
-│   ├── 00_setup_colab.ipynb      Google Colab'de kurulum (ortam / veri seti Google Drive'da önbelleklenir)
+│   ├── 00_setup.ipynb            Conda'lı makinede kurulum (ortam, checkpoint, duman testi)
+│   ├── 00_setup_colab.ipynb      Google Colab'de kurulum (ortam / checkpoint'ler / diziler Google Drive'da önbelleklenir)
 │   ├── 01_run_experiment.ipynb   Parametreler → çalıştırma → sonuçlar
 │   ├── 02_compare.ipynb          Deney karşılaştırma
 │   ├── 03_train.ipynb            STARK-ST eğitimi (aşama 1 / 2), veri seti kombinasyonlarıyla
@@ -133,6 +145,7 @@ stark-cls-finetune/
 │   ├── plots.py                  Grafikler
 │   ├── compare.py                Deney karşılaştırma
 │   ├── setup_utils.py            Ortam kontrolü, indirme, duman testi
+│   ├── vot_data.py               VOT-LT2020 dizileri: gerektiğinde indirme (yalnızca kullanılanlar) + önbellek
 │   ├── training.py               TrainConfig: eğitim parametreleri, koşu klasörleri, devam etme, dışa aktarma
 │   ├── train_data.py             Eğitim veri setlerini indirme / açma
 │   └── __main__.py               CLI (python -m stark_ft ...)
@@ -225,7 +238,7 @@ Verilmeyen parametre varsayılan değerini alır.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `sequences` | `"all"` | `"all"` veya dizi adları listesi, örn. `["bull", "ballet"]`. Dizi adı dataset klasöründeki klasör adıdır. |
+| `sequences` | `"all"` | `"all"` (50 VOT-LT2020 dizisi) veya dizi adları listesi, örn. `["bull", "ballet"]`. Dataset klasöründe henüz olmayan diziler koşu başlarken indirilir (§2). Dataset klasöründeki kendi klasörleriniz de verilebilir. |
 
 ### Template update (yalnızca `stark_st`)
 
@@ -396,7 +409,7 @@ Eğitilen model, resmi model gibi, inference sırasında fine-tune ile veya fine
 
 1. `notebooks/03_train.ipynb` dosyasını açın (Colab: [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb); Colab'de **A100** veya **L4** GPU seçin).
 2. Parametreleri (`TRAIN = dict(...)`, §8.4) ve GOT-10k için indirme linklerini (§8.3) yazın.
-3. *Hazırlık* hücresini çalıştırın: Colab'de oturum VOT veri seti olmadan hazırlanır; ardından veri setleri indirilir /
+3. *Hazırlık* hücresini çalıştırın: Colab'de oturum hazırlanır (ortam, checkpoint); ardından veri setleri indirilir /
    açılır (yalnızca eksik olanlar) ve bir deneme çalıştırması (dry run) koşu klasörünü, epoch ve adım sayılarını ve
    başlangıç ağırlıklarını gösterir.
 4. *Eğitim* hücresini çalıştırın. İlerleme satırları saniyedeki örnek sayısını, epoch'un ve eğitimin kalan süresini
@@ -584,7 +597,7 @@ python -m stark_ft analyze outputs/<deney> --score-thr 0.5 --thr-resolution 100
 python -m stark_ft list
 python -m stark_ft compare <deney1> <deney2> --out comparison.xlsx --plot comparison.png
 python -m stark_ft download-checkpoints --model stark_st --model-config baseline_R101 baseline
-python -m stark_ft download-dataset
+python -m stark_ft download-dataset --sequences bull ballet  # isteğe bağlı: deneyler kullandıklarını indirir
 python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL ...] [--archives KLASÖR]
 python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --dry-run   # kontrol; sonra --dry-run olmadan
 python -m stark_ft train-report <koşu adı>                 # ilerleme + history.png
@@ -593,6 +606,7 @@ python -m tests.test_sampling                              # negatif örnek geom
 python -m tests.test_config                                # parametre okuma / doğrulama testleri
 python -m tests.test_training                              # eğitim parametreleri testleri
 python -m tests.test_train_data                            # eğitim verisi hazırlığı testleri
+python -m tests.test_vot_data                              # VOT dizisi indirme testleri
 ```
 
 `--set` değerleri YAML olarak yorumlanır: `1e-4` → sayı, `true` → bool, `[a, b]` → liste.
@@ -604,12 +618,13 @@ python -m tests.test_train_data                            # eğitim verisi haz�
 | `Conda environment 'vot1' not found` | `00_setup.ipynb` 1. adım. Ortam başka yerdeyse `VOT1_PYTHON=/yol/envs/vot1/bin/python` ortam değişkenini tanımlayın. |
 | `Checkpoint not found` | `00_setup.ipynb` 3. adım veya dosyayı hata mesajındaki konuma koyun. |
 | Google Drive "kota aşıldı" | Hata mesajındaki linkten tarayıcıyla indirip belirtilen klasöre koyun. |
-| `No VOT sequences found in the dataset folder` | `00_setup.ipynb` 4. adım veya `configs/paths.local.yaml` içinde `dataset`. |
+| `Unknown sequence(s): [...]` | `sequences` içinde yazım hatası; hata mesajı 50 VOT-LT2020 dizisinin adlarını listeler. |
+| VOT dizisi indirilemiyor / `Checksum mismatch` | Ağ veya sunucu sorunu. Aynı hücreyi tekrar çalıştırın: biten diziler korunur, yarım kalan dosya kaldığı yerden devam eder. |
 | `Completed sequences: 47/50` gibi eksik | Hata veren dizi atlanır, diğerleri koşmaya devam eder. Tracker'ın hata çıktısı `outputs/<deney>/vot_workspace/logs/` içindedir. Aynı deneyi tekrar çalıştırmak tamamlananları atlar, eksikleri yeniden dener. |
 | `no kernel image is available` / sm_120 uyarısı | GPU, ortamdaki PyTorch tarafından desteklenmiyor (RTX 5000 serisi). RTX 3000/4000 serisi kullanın. |
 | "A newer version of the VOT toolkit is available" | Görmezden gelin; depo vot-toolkit **0.5.3** ile test edilmiştir. Güncellemeyin. |
 | Colab: `WARNING: no GPU in this session` | *Runtime → Change runtime type → GPU* seçip ilk hücreyi tekrar çalıştırın. |
-| Colab: Drive'a arşivleme başarısız | Google Drive'da yeterli yer yok (≈ 26 GB gerekir). Yer açıp ilk hücreyi tekrar çalıştırın; tamamlanan adımlar tekrarlanmaz. |
+| Colab: Drive'a arşivleme başarısız | Google Drive'da yeterli yer yok (≈ 8 GB + kullandığınız diziler gerekir). Yer açıp ilk hücreyi tekrar çalıştırın; tamamlanan adımlar tekrarlanmaz. |
 | Eğitim: `CUDA out of memory` | `micro_batch` değerini düşürün (örn. 8) ve `effective_batch=128` olarak bırakın: güncelleme aynı kalır (§8.6). |
 | Eğitim: oturum / makine çöküyor ya da RAM yetmiyor | `num_workers` değerini düşürün (COCO'nun anotasyon dosyası büyüktür ve her veri işçisi bellek kullanır). Colab'de High-RAM oturumu kullanın. |
 | Eğitim: `Not enough disk space for ...` | Açılmış veri setleri yerel diske sığmıyor (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Daha büyük diskli bir makine / oturum ya da daha az veri seti kullanın. |

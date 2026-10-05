@@ -120,8 +120,9 @@ def _open(url, headers=None):
     return r
 
 
-def download(url: str, dst_dir: Path, filename: str = None) -> Path:
-    """Downloads `url` into dst_dir, resuming an interrupted download (<file>.part). Returns the file path."""
+def download(url: str, dst_dir: Path, filename: str = None, quiet: bool = False) -> Path:
+    """Downloads `url` into dst_dir, resuming an interrupted download (<file>.part). Returns the file path.
+    quiet=True: no start line (progress is still shown for long downloads)."""
     dst_dir.mkdir(parents=True, exist_ok=True)
     map_file = dst_dir / URL_MAP
     url_map = json.loads(map_file.read_text()) if map_file.is_file() else {}
@@ -143,8 +144,9 @@ def download(url: str, dst_dir: Path, filename: str = None) -> Path:
                 r = _open(url, {"Range": f"bytes={pos}-"})
                 if r.status != 206:  # the server ignored the Range header: start again
                     pos = 0
-            _log(f"Downloading {filename} ({_gb(total) if total else 'unknown size'})"
-                 f"{f', resuming at {_gb(pos)}' if pos else ''} -> {dst_dir}")
+            if not quiet or pos:
+                _log(f"Downloading {filename} ({_gb(total) if total else 'unknown size'})"
+                     f"{f', resuming at {_gb(pos)}' if pos else ''} -> {dst_dir}")
             done, t0, last = pos, time.time(), time.time()
             with open(part, "ab" if pos else "wb") as f:
                 for chunk in iter(lambda: r.read(8 << 20), b""):

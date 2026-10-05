@@ -3,6 +3,7 @@
 # instead (copy paths.local.example.yaml). That file is ignored by git.
 checkpoints: checkpoints              # <checkpoints>/<stark_st2|stark_s>/<model_config>/<file>.pth.tar
 dataset: data/votlt2020/sequences     # VOT-format sequences: <dataset>/<sequence>/{color/, groundtruth.txt, sequence}
+dataset_cache:                        # optional: keep a copy (<sequence>.tar) of every downloaded sequence here
 outputs: outputs                      # Each experiment is written to <outputs>/<experiment name>/
 train_data: data/train                # Training datasets: <train_data>/{got10k/train, coco, lasot, trackingnet}
 train_outputs: outputs/training       # Each training run is written to <train_outputs>/<run name>/

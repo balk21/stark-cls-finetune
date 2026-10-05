@@ -6,12 +6,13 @@ Priority (later entries override earlier ones):
      data/train/, outputs/training/
   2. configs/paths.yaml          (in the repository; relative paths are resolved against the repository root)
   3. configs/paths.local.yaml    (ignored by git; for machine-specific settings)
-  4. Environment variables: STARK_CLEAN_CHECKPOINTS, STARK_CLEAN_DATASET, STARK_CLEAN_OUTPUTS,
-     STARK_CLEAN_TRAIN_DATA, STARK_CLEAN_TRAIN_OUTPUTS
+  4. Environment variables: STARK_CLEAN_CHECKPOINTS, STARK_CLEAN_DATASET, STARK_CLEAN_DATASET_CACHE,
+     STARK_CLEAN_OUTPUTS, STARK_CLEAN_TRAIN_DATA, STARK_CLEAN_TRAIN_OUTPUTS
 """
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -21,6 +22,7 @@ MODEL_CONFIG_DIR = REPO_ROOT / "model_configs"
 _KEYS = {
     "checkpoints": "STARK_CLEAN_CHECKPOINTS",
     "dataset": "STARK_CLEAN_DATASET",
+    "dataset_cache": "STARK_CLEAN_DATASET_CACHE",
     "outputs": "STARK_CLEAN_OUTPUTS",
     "train_data": "STARK_CLEAN_TRAIN_DATA",
     "train_outputs": "STARK_CLEAN_TRAIN_OUTPUTS",
@@ -28,6 +30,7 @@ _KEYS = {
 _DEFAULTS = {
     "checkpoints": "checkpoints",
     "dataset": "data/votlt2020/sequences",
+    "dataset_cache": None,
     "outputs": "outputs",
     "train_data": "data/train",
     "train_outputs": "outputs/training",
@@ -41,9 +44,10 @@ class Paths:
     outputs: Path      # Each experiment is written to <outputs>/<experiment name>/
     train_data: Path   # Training datasets: <train_data>/{got10k/train, coco, lasot, trackingnet}
     train_outputs: Path  # Each training run is written to <train_outputs>/<run name>/
+    dataset_cache: Optional[Path] = None  # Optional: a copy of every downloaded sequence (<sequence>.tar)
 
     def as_dict(self):
-        return {k: str(v) for k, v in self.__dict__.items()}
+        return {k: (str(v) if v is not None else None) for k, v in self.__dict__.items()}
 
 
 def _resolve(value: str) -> Path:
@@ -69,7 +73,7 @@ def get_paths() -> Paths:
     for key, env in _KEYS.items():
         if os.environ.get(env):
             values[key] = os.environ[env]
-    return Paths(**{k: _resolve(v) for k, v in values.items()})
+    return Paths(**{k: (_resolve(v) if v else None) for k, v in values.items()})
 
 
 def list_sequences(dataset_dir: Path):

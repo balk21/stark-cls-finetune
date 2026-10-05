@@ -2,6 +2,7 @@
 # Only list the keys you want to change. Absolute paths or paths relative to the repository root are accepted.
 # checkpoints: /home/user/stark_checkpoints
 # dataset: /data/vot/votlt2020/sequences
+# dataset_cache: /data/vot/sequence_archives
 # outputs: /data/stark_outputs
 # train_data: /data/tracking_train_sets
 # train_outputs: /data/stark_training

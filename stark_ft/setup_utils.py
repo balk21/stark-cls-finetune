@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+from stark_ft import vot_data
 from stark_ft.config import ExperimentConfig
 from stark_ft.paths import get_paths, list_sequences
 
@@ -20,7 +21,6 @@ OFFICIAL_CHECKPOINTS = {
     ("stark_s", "baseline"): ("STARKS_ep0500.pth.tar", "1zlecl8DJKZk2Waok52S4gkB0DVRoN2Vl"),
     ("stark_s", "baseline_got10k_only"): ("STARKS_ep0500.pth.tar", "1IJydxCXbpQF6p5MDIvvYWi6xAjDspEiu"),
 }
-VOTLT2020_DATASET = "vot:vot-lt2019"  # the VOT-LT2020 stack uses the VOT-LT2019 (LTB50) sequences
 TESTED_GPU_SERIES = "NVIDIA RTX 3000 / 4000 series (Ampere / Ada, compute capability 8.x)"
 
 
@@ -101,17 +101,15 @@ def download_checkpoints(models=(("stark_st", "baseline_R101"),), force=False):
         tmp.rename(target)
 
 
-def download_dataset(target=None):
-    """Downloads the VOT-LT2020 (LTB50) sequences (~17 GB; time depends on the connection)."""
-    target = Path(target) if target else get_paths().dataset
-    if list_sequences(target):
-        print(f"Dataset already present: {target} ({len(list_sequences(target))} sequences)")
-        return target
-    target.mkdir(parents=True, exist_ok=True)
-    from vot.dataset import download_dataset as vot_download
-    print(f"Downloading: {VOTLT2020_DATASET} -> {target}")
-    vot_download(VOTLT2020_DATASET, str(target))
-    print(f"Done: {len(list_sequences(target))} sequences")
+def download_dataset(target=None, sequences="all"):
+    """Downloads VOT-LT2020 (LTB50) sequences that are not there yet: "all" (50 sequences, 17.6 GB) or a list of
+    names. Not needed before experiments: every experiment downloads the sequences it uses (stark_ft/vot_data.py)."""
+    paths = get_paths()
+    target = Path(target) if target else paths.dataset
+    names = vot_data.resolve(sequences, target)
+    fetched = vot_data.ensure(names, target, paths.dataset_cache)
+    print(f"{len(names) - len(fetched)} of {len(names)} sequence(s) were already present, {len(fetched)} fetched. "
+          f"Dataset: {target} ({len(list_sequences(target))} sequences)")
     return target
 
 
@@ -122,7 +120,8 @@ def disk_usage(path):
 
 def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int = 30):
     """Without vot-toolkit: loads the model and tracks the first n_frames frames of a sequence.
-    Verifies within seconds that the setup (checkpoint, GPU, dataset) is correct."""
+    Verifies within seconds that the setup (checkpoint, GPU, dataset) is correct. If no sequence is on disk yet,
+    the smallest one (ballet, 57 MB) is downloaded."""
     import cv2
     import numpy as np
 
@@ -132,9 +131,8 @@ def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int
     cfg = cfg or ExperimentConfig()
     paths = get_paths()
     seqs = list_sequences(paths.dataset)
-    if not seqs:
-        raise FileNotFoundError(f"Dataset not found: {paths.dataset}")
-    seq = sequence or seqs[0]
+    seq = sequence or (seqs[0] if seqs else vot_data.SMOKE_SEQUENCE)
+    vot_data.ensure(vot_data.resolve([seq], paths.dataset), paths.dataset, paths.dataset_cache)
     seq_dir = paths.dataset / seq
     frames = sorted((seq_dir / "color").glob("*.jpg"))[:n_frames]
     gt = read_groundtruth(seq_dir / "groundtruth.txt")

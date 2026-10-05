@@ -1,29 +1,30 @@
 """
 Google Colab bootstrap — uses ONLY the standard library.
 
-Colab sessions are ephemeral, so every session has to restore the environment, the dataset and the
-checkpoints. `bootstrap()` is idempotent: it only does what is missing in the current session.
+Colab sessions are ephemeral, so every session has to restore the environment and the checkpoints.
+`bootstrap()` is idempotent: it only does what is missing in the current session.
 
   First session (slow, once):
     - installs micromamba and creates the `vot1` environment from environment/vot1_environment.yml
       (exactly the same packages as on Vast.ai / a local conda machine), then caches it on Google Drive;
-    - downloads the official checkpoint(s) to Drive;
-    - downloads the VOT-LT2020 dataset and caches it on Drive as a single tar file (skipped with
-      vot_dataset=False, e.g. in training sessions).
+    - downloads the official checkpoint(s) to Drive.
   Later sessions (a few minutes):
-    - restores the environment and the dataset from the Drive caches to the local disk.
+    - restores the environment from the Drive cache to the local disk.
+  VOT-LT2020 sequences are NOT downloaded here: every experiment downloads only the sequences it uses
+  (stark_ft/vot_data.py) and keeps a copy of each on Drive (<drive_root>/cache/votlt2019_sequences/<sequence>.tar),
+  so later sessions restore them from Drive. bootstrap(vot_sequences="all" or a list) fetches them up front instead.
   Training datasets (03_train.ipynb) are prepared separately with `python -m stark_ft prepare-train-data`; their
   archives are kept on Drive (<drive_root>/train_archives) and extracted to the local disk in every session.
 
 Layout:
   <drive_root>/cache/vot1_env_<hash>.tar        cached conda environment (~7.5 GB)
-  <drive_root>/cache/votlt2020_sequences.tar    cached dataset (~17 GB)
+  <drive_root>/cache/votlt2019_sequences/       one tar per downloaded VOT sequence (all 50: 17.6 GB)
   <drive_root>/checkpoints/...                  checkpoints (same layout as checkpoints/ in the repository)
   <drive_root>/outputs/                         experiment outputs (persist across sessions, so runs can resume)
   <drive_root>/train_archives/{coco,got10k}/    training dataset archives (COCO ~19.6 GB; GOT-10k: see README)
   <drive_root>/training/                        training runs (persist across sessions, so training can resume)
   <local_root>/micromamba/envs/vot1/            the environment (local disk)
-  <local_root>/data/votlt2020/sequences/        the dataset (local disk; reading 200k images from Drive is too slow)
+  <local_root>/data/votlt2020/sequences/        the VOT sequences (local disk; reading images from Drive is too slow)
   <local_root>/checkpoints/                     local copy of the Drive checkpoints
   <local_root>/train_data/                      extracted training datasets (local disk)
 """
@@ -179,33 +180,17 @@ def setup_checkpoints(drive_root: Path, local_root: Path, checkpoints):
     return local_ckpt
 
 
-def _dataset_ready(path: Path) -> bool:
-    return path.is_dir() and any((p / "sequence").is_file() for p in path.iterdir() if p.is_dir())
-
-
-def setup_dataset(drive_root: Path, local_root: Path, python: Path, download=True) -> Path:
-    """Restores the dataset from the Drive cache, or downloads it and creates the cache."""
-    parent = local_root / "data" / "votlt2020"
-    seq_dir = parent / "sequences"
-    cache = drive_root / "cache" / "votlt2020_sequences.tar"
-    if _dataset_ready(seq_dir):
-        _log(f"Dataset ready: {seq_dir}")
-        return seq_dir
-    if cache.is_file():
-        _log(f"Restoring the dataset from Drive ({cache.stat().st_size / 1e9:.1f} GB) ...")
-        _tar_extract(cache, parent)  # the cache contains the folder "sequences/"
-        if not _dataset_ready(seq_dir):
-            raise RuntimeError(f"The dataset cache did not produce sequences in {seq_dir}: {cache}")
-        _log(f"Dataset ready: {seq_dir}")
-        return seq_dir
-    if not download:
-        raise FileNotFoundError(f"No dataset at {seq_dir} and no cache at {cache}")
-    _log("Downloading VOT-LT2020 (first time only, ~17 GB) ...")
-    _run([python, "-m", "stark_ft", "download-dataset"], env={"STARK_CLEAN_DATASET": str(seq_dir)})
-    _log(f"Caching the dataset on Drive: {cache} (this takes a while) ...")
-    _tar_create(parent, "sequences", cache)
-    _log(f"Dataset ready: {seq_dir}")
-    return seq_dir
+def setup_dataset(drive_root: Path, local_root: Path):
+    """The VOT sequence folder (local disk) and its cache on Drive. Nothing is downloaded here."""
+    seq_dir = local_root / "data" / "votlt2020" / "sequences"
+    cache = drive_root / "cache" / "votlt2019_sequences"
+    seq_dir.mkdir(parents=True, exist_ok=True)
+    cached = len(list(cache.glob("*.tar"))) if cache.is_dir() else 0
+    _log(f"VOT sequences: fetched when an experiment needs them ({cached} of 50 cached on Drive in {cache})")
+    old = drive_root / "cache" / "votlt2020_sequences.tar"
+    if old.is_file():
+        _log(f"Note: {old} ({old.stat().st_size / 1e9:.1f} GB) is no longer used; you can delete it.")
+    return seq_dir, cache
 
 
 def check_gpu(python: Path) -> bool:
@@ -231,9 +216,10 @@ def write_paths(**paths):
 
 
 def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoints=DEFAULT_CHECKPOINTS,
-              download_dataset=True, rebuild_env=False, vot_dataset=True) -> dict:
+              rebuild_env=False, vot_sequences=()) -> dict:
     """Prepares the current Colab session. Safe to call in every notebook; only missing steps are executed.
-    vot_dataset=False skips the VOT-LT2020 dataset (not needed for training)."""
+    vot_sequences: VOT sequences to fetch now ("all" or a list of names); by default none, since every experiment
+    fetches the sequences it uses."""
     t0 = time.time()
     if mount is None:
         mount = in_colab()
@@ -250,14 +236,13 @@ def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoi
     python = setup_environment(drive_root, local_root, rebuild=rebuild_env)
     gpu_ok = check_gpu(python)
     ckpt = setup_checkpoints(drive_root, local_root, checkpoints)
-    if vot_dataset:
-        dataset = setup_dataset(drive_root, local_root, python, download=download_dataset)
-    else:  # keep a dataset restored earlier in this session in paths.local.yaml
-        seq_dir = local_root / "data" / "votlt2020" / "sequences"
-        dataset = seq_dir if _dataset_ready(seq_dir) else None
-    info = {"checkpoints": ckpt, "dataset": dataset, "outputs": drive_root / "outputs",
+    dataset, dataset_cache = setup_dataset(drive_root, local_root)
+    info = {"checkpoints": ckpt, "dataset": dataset, "dataset_cache": dataset_cache, "outputs": drive_root / "outputs",
             "train_data": local_root / "train_data", "train_outputs": drive_root / "training"}
     paths_file = write_paths(**info)
+    if vot_sequences:
+        names = ["all"] if vot_sequences == "all" else list(vot_sequences)
+        _run([python, "-m", "stark_ft", "download-dataset", "--sequences", *names])
     os.environ["VOT1_PYTHON"] = str(python)  # used by nbhelper.python()
     _log(f"Session ready in {time.time() - t0:.0f} s. Paths: {paths_file}")
     info = {k: (str(v) if v is not None else None) for k, v in info.items()}

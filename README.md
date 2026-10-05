@@ -41,7 +41,7 @@ runs on a Vast.ai server, on Google Colab and on a personal computer.
 |---|---|
 | GPU | NVIDIA **RTX 3000 / 4000 series** (tested). RTX 5000 series (Blackwell) GPUs do **not** work with the PyTorch 2.4.1 in the environment. |
 | GPU memory | ≥ 8 GB |
-| Disk | ≥ 40 GB (dataset ≈ 17 GB + conda environment + outputs) |
+| Disk | ≥ 40 GB (conda environment + outputs + the VOT sequences you use; all 50: 17.6 GB) |
 | Software | An image with `conda` (e.g. Vast.ai's PyTorch templates with conda) and Jupyter |
 
 **Steps**
@@ -52,7 +52,8 @@ runs on a Vast.ai server, on Google Colab and on a personal computer.
    git clone https://github.com/balk21/stark-cls-finetune.git
    ```
 3. Open `notebooks/00_setup.ipynb` and run the cells in order:
-   the `vot1` environment is created, the checkpoint and the dataset are downloaded and a short smoke test runs.
+   the `vot1` environment is created, the checkpoint is downloaded and a short smoke test runs (it downloads one
+   sequence, `ballet`, 57 MB). The other VOT sequences are downloaded when an experiment first uses them (§2).
 4. Edit the parameters in `notebooks/01_run_experiment.ipynb` and run the experiment.
 5. Compare experiments with `notebooks/02_compare.ipynb`.
 6. Optional: train STARK-ST itself with `notebooks/03_train.ipynb` (see [§8](#8-training-stark-st-base-training)).
@@ -80,14 +81,14 @@ Colab gives a fresh machine in every session, so everything that is slow to prep
 |---|---|---|
 | `vot1` environment | created (~5–10 min), cached on Drive (`cache/vot1_env_<hash>.tar`, 7.8 GB) | restored (~1–3 min) |
 | Checkpoint | downloaded to Drive (`checkpoints/`) | copied (seconds) |
-| VOT-LT2020 dataset | downloaded (20–60 min), cached on Drive (`cache/votlt2020_sequences.tar`, 17 GB) | restored (a few min) |
+| VOT-LT2020 sequences | downloaded when an experiment first uses them, only those (e.g. `bull` 58 MB; all 50: 17.6 GB), copied to Drive (`cache/votlt2019_sequences/<sequence>.tar`) | restored from Drive when an experiment uses them |
 | Outputs | written to Drive (`outputs/`) | kept; interrupted runs resume |
 
-**Google Drive space needed:** ≈ 26 GB + experiment outputs. Your own checkpoints can be uploaded to
+**Google Drive space needed:** ≈ 8 GB + the sequences you use (all 50: 17.6 GB) + experiment outputs. Your own checkpoints can be uploaded to
 `MyDrive/LOKAP/checkpoints/<stark_st2|stark_s>/<model_config>/`.
 
 **Training on Colab:** open `03_train.ipynb` [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb)
-directly; it does not need the VOT dataset (see [§8](#8-training-stark-st-base-training)).
+directly; it does not need the VOT sequences (see [§8](#8-training-stark-st-base-training)).
 
 ## 2. On your own computer
 
@@ -97,25 +98,37 @@ copy `configs/paths.local.example.yaml` to `configs/paths.local.yaml` and set th
 ```yaml
 checkpoints: /home/user/stark/checkpoints/train   # <checkpoints>/stark_st2/baseline_R101/STARKST_ep0050.pth.tar
 dataset: /home/user/vot/votlt2020/sequences        # <dataset>/<sequence>/{color/, groundtruth.txt, sequence}
+dataset_cache: /data/vot_sequence_archives         # optional: a copy (<sequence>.tar) of every downloaded sequence
 outputs: /home/user/stark_outputs
 train_data: /data/tracking_train                   # training only: <train_data>/{got10k/train, coco, ...} (§8.3)
 train_outputs: /home/user/stark_training           # training only: one folder per training run (§8.5)
 ```
 
 This file is ignored by git. The same settings can be given with the environment variables
-`STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET`, `STARK_CLEAN_OUTPUTS`, `STARK_CLEAN_TRAIN_DATA` and
-`STARK_CLEAN_TRAIN_OUTPUTS` (priority: environment variable > `paths.local.yaml` > `paths.yaml`).
+`STARK_CLEAN_CHECKPOINTS`, `STARK_CLEAN_DATASET`, `STARK_CLEAN_DATASET_CACHE`, `STARK_CLEAN_OUTPUTS`,
+`STARK_CLEAN_TRAIN_DATA` and `STARK_CLEAN_TRAIN_OUTPUTS` (priority: environment variable > `paths.local.yaml` >
+`paths.yaml`).
 
-**Nothing is written into the dataset folder.** The `list.txt` that vot-toolkit needs is created in each
-experiment's own `vot_workspace/` folder, with absolute paths to the sequences.
+**VOT sequences are downloaded on demand.** Nothing has to be downloaded in advance. When an experiment starts, the
+sequences it uses that are not in the `dataset` folder yet are downloaded one by one from the official VOT server
+(the VOT-LT2019 sequences, which the VOT-LT2020 stack uses), checked against the official SHA-1 checksums and written
+exactly as vot-toolkit writes them (same files, byte for byte). `sequences=["bull"]` downloads only bull (58 MB);
+`"all"` downloads all 50 (17.6 GB, 20–60 min). `show` / `nb.describe` tells you beforehand what will be downloaded.
+To download in advance: `python -m stark_ft download-dataset [--sequences bull ballet]` (no `--sequences`: all 50).
+If `dataset_cache` is set, a copy of every downloaded sequence (`<sequence>.tar`) is kept there and used instead of
+the server on another machine; on Colab this is the Drive folder `cache/votlt2019_sequences/`.
+
+**Existing sequences are only read.** Files are written into the dataset folder only for sequences that are
+missing and downloaded. The `list.txt` that vot-toolkit needs for an experiment is created in the experiment's own
+`vot_workspace/` folder, with absolute paths to the sequences.
 
 ## 3. Folder layout
 
 ```
 stark-cls-finetune/
 ├── notebooks/
-│   ├── 00_setup.ipynb            Setup on a conda machine (environment, checkpoint, dataset, smoke test)
-│   ├── 00_setup_colab.ipynb      Setup on Google Colab (environment / dataset cached on Google Drive)
+│   ├── 00_setup.ipynb            Setup on a conda machine (environment, checkpoint, smoke test)
+│   ├── 00_setup_colab.ipynb      Setup on Google Colab (environment / checkpoints / sequences cached on Google Drive)
 │   ├── 01_run_experiment.ipynb   Parameters → run → results
 │   ├── 02_compare.ipynb          Comparing experiments
 │   ├── 03_train.ipynb            Training STARK-ST (stage 1 / 2) on a combination of datasets
@@ -132,6 +145,7 @@ stark-cls-finetune/
 │   ├── plots.py                  Plots
 │   ├── compare.py                Comparing experiments
 │   ├── setup_utils.py            Environment check, downloads, smoke test
+│   ├── vot_data.py               VOT-LT2020 sequences: on-demand download (only the ones used) + cache
 │   ├── training.py               TrainConfig: training parameters, run folders, resuming, export
 │   ├── train_data.py             Downloading / extracting the training datasets
 │   └── __main__.py               CLI (python -m stark_ft ...)
@@ -224,7 +238,7 @@ Parameters that are not given take their default values.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `sequences` | `"all"` | `"all"` or a list of sequence names, e.g. `["bull", "ballet"]`. A sequence name is a folder name in the dataset folder. |
+| `sequences` | `"all"` | `"all"` (the 50 VOT-LT2020 sequences) or a list of names, e.g. `["bull", "ballet"]`. Sequences that are not in the dataset folder yet are downloaded when the run starts (§2). A folder of your own in the dataset folder can also be named. |
 
 ### Template update (`stark_st` only)
 
@@ -395,7 +409,7 @@ fine-tuning, via `checkpoint="train:<run name>"` (§5).
 
 1. Open `notebooks/03_train.ipynb` (Colab: [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/03_train.ipynb); on Colab choose an **A100** or **L4** GPU runtime).
 2. Set the parameters (`TRAIN = dict(...)`, §8.4) and, for GOT-10k, the download links (§8.3).
-3. Run *Prepare*: on Colab the session is set up without the VOT dataset; then the datasets are downloaded /
+3. Run *Prepare*: on Colab the session is set up (environment, checkpoint); then the datasets are downloaded /
    extracted (only what is missing) and a dry run shows the run folder, the epochs, the steps and the initial weights.
 4. Run *Train*. Progress lines show samples/s, the epoch ETA and the training ETA. Stopping the cell stops the
    run; running it again **resumes** from the last finished epoch.
@@ -581,7 +595,7 @@ python -m stark_ft analyze outputs/<experiment> --score-thr 0.5 --thr-resolution
 python -m stark_ft list
 python -m stark_ft compare <exp1> <exp2> --out comparison.xlsx --plot comparison.png
 python -m stark_ft download-checkpoints --model stark_st --model-config baseline_R101 baseline
-python -m stark_ft download-dataset
+python -m stark_ft download-dataset --sequences bull ballet  # optional: experiments download what they use
 python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL ...] [--archives DIR]
 python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --dry-run   # check, then run without --dry-run
 python -m stark_ft train-report <run name>                 # progress + history.png
@@ -590,6 +604,7 @@ python -m tests.test_sampling                              # tests of the negati
 python -m tests.test_config                                # tests of reading / validating parameters
 python -m tests.test_training                              # tests of the training parameters
 python -m tests.test_train_data                            # tests of the training data preparation
+python -m tests.test_vot_data                              # tests of the VOT sequence download
 ```
 
 `--set` values are parsed as YAML: `1e-4` → number, `true` → bool, `[a, b]` → list.
@@ -601,12 +616,13 @@ python -m tests.test_train_data                            # tests of the traini
 | `Conda environment 'vot1' not found` | Step 1 of `00_setup.ipynb`. If the environment is elsewhere, set `VOT1_PYTHON=/path/envs/vot1/bin/python`. |
 | `Checkpoint not found` | Step 3 of `00_setup.ipynb`, or put the file at the location shown in the error message. |
 | Google Drive "quota exceeded" | Download the file in a browser from the link in the error message and put it in the folder shown there. |
-| `No VOT sequences found in the dataset folder` | Step 4 of `00_setup.ipynb`, or set `dataset` in `configs/paths.local.yaml`. |
+| `Unknown sequence(s): [...]` | A typo in `sequences`; the error lists the 50 VOT-LT2020 names. |
+| VOT sequence download fails / `Checksum mismatch` | A network or server problem. Run the same cell again: finished sequences are kept, an interrupted file continues. |
 | Missing sequences, e.g. `Completed sequences: 47/50` | A failing sequence is skipped and the others keep running. The tracker's error output is in `outputs/<experiment>/vot_workspace/logs/`. Running the same experiment again skips completed sequences and retries the missing ones. |
 | `no kernel image is available` / sm_120 warning | The GPU is not supported by the PyTorch in the environment (RTX 5000 series). Use an RTX 3000/4000 series GPU. |
 | "A newer version of the VOT toolkit is available" | Ignore it; the repository is tested with vot-toolkit **0.5.3**. Do not upgrade. |
 | Colab: `WARNING: no GPU in this session` | *Runtime → Change runtime type → GPU*, then run the first cell again. |
-| Colab: caching to Drive fails | Not enough Google Drive space (≈ 26 GB needed). Free space and run the first cell again; completed steps are not repeated. |
+| Colab: caching to Drive fails | Not enough Google Drive space (≈ 8 GB + the sequences you use). Free space and run the first cell again; completed steps are not repeated. |
 | Training: `CUDA out of memory` | Lower `micro_batch` (e.g. 8) and keep `effective_batch=128`: the update stays the same (§8.6). |
 | Training: the runtime / machine crashes or runs out of RAM | Lower `num_workers` (COCO's annotation file is large and every data worker uses memory). On Colab, use a High-RAM runtime. |
 | Training: `Not enough disk space for ...` | The extracted datasets do not fit on the local disk (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Use a machine / runtime with a larger disk, or fewer datasets. |
