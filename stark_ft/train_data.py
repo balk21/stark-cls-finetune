@@ -103,7 +103,7 @@ def direct_url(url: str) -> str:
 QUOTA_HELP = ("Google Drive limits how often a shared file can be downloaded per day, and this file's limit is "
               "used up (it may work again later). The reliable way: open the link in the browser, 'Add shortcut to "
               "Drive', right-click the shortcut -> 'Make a copy', and put the copy into the GOT-10k archive folder (on "
-              "Colab <DRIVE_ROOT>/train_archives/got10k/). Your own copy has no such limit. See README, section 8.3.")
+              "Colab <DRIVE_ROOT>/train_archives/got10k/). Your own copy has no such limit. See README, section 4.1.")
 
 
 def _open(url, headers=None):
@@ -320,7 +320,7 @@ def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=
             "Put the GOT-10k train archives (e.g. the official full_data.zip) into this folder and run again. "
             "On Colab with a Google Drive link: open the link in the browser -> 'Add shortcut to Drive' -> "
             "right-click the shortcut -> 'Make a copy' -> move the copy ('Copy of full_data.zip') into this folder "
-            "(README, section 8.3).\nThe links come by e-mail after a free registration at "
+            "(README, section 4.1).\nThe links come by e-mail after a free registration at "
             "http://got-10k.aitestunion.com/downloads ; download links or archive paths can also be passed as "
             "got10k_urls.")
     archives = _without_duplicates(archives)
@@ -379,7 +379,7 @@ def prepare(datasets, train_data: Path, archive_dir: Path = None, got10k_urls=()
     unsupported = [d for d in datasets if d not in SUPPORTED]
     if unsupported:
         raise ValueError(f"Automatic preparation supports {list(SUPPORTED)}; prepare {unsupported} manually "
-                         "(see README, 'Training').")
+                         "(see docs/details.md, section 7.3).")
     out = {}
     if "coco" in datasets:
         out["coco"] = str(prepare_coco(train_data / "coco", archive_dir / "coco", delete_archives))

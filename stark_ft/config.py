@@ -1,7 +1,7 @@
 """
 Experiment configuration: ALL parameters that define a test run live here.
 
-The meaning of every parameter is explained in detail in the "Parameters" section of README.md.
+The meaning of every parameter is explained in docs/details.md (section 4, "Parameters").
 """
 import json
 from dataclasses import asdict, dataclass, fields
