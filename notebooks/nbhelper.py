@@ -306,7 +306,7 @@ def setup_training(params: dict, got10k_urls=(), **bootstrap_kwargs) -> dict:
     """Everything a training run needs: on Colab the session (environment, checkpoint, paths), then the training
     datasets. Returns the dry-run information of the run."""
     if in_colab():
-        official = params.get("stage", 2) == 2 and params.get("init") in (None, "official")
+        official = params.get("stage") == 2 and params.get("init") == "official"
         ckpts = (("stark_st", params.get("model_config", "baseline_R101")),) if official else ()
         colab_bootstrap(checkpoints=ckpts, **bootstrap_kwargs)
     prepare_training_data(training_datasets(params), got10k_urls)

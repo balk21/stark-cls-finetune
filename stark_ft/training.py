@@ -16,7 +16,8 @@ Run folder (<train_outputs>/<run name>/):
     tensorboard/         TensorBoard logs
     final.pth.tar        final weights (written when training finishes)
 A trained stage-2 model is evaluated with  ExperimentConfig(model_config=..., checkpoint="train:<run name>"), and a
-stage-1 run is used to initialise stage 2 with  TrainConfig(stage=2, init="<stage-1 run name>").
+stage-1 run is used to initialise stage 2 with  TrainConfig(stage=2, init="<stage-1 run name>"). Stage 2 always needs
+an explicit `init`; init="official" (STARK's weights, trained on all four datasets) has to be asked for by name.
 Nothing is written to the `checkpoints` folder (it may be a shared, read-only location).
 """
 import datetime
@@ -61,11 +62,11 @@ OFFICIAL_STAGE2 = "STARKST_ep0050.pth.tar"
 class TrainConfig:
     name: Optional[str] = None               # Run folder name; None = generated from the parameters
     model_config: str = "baseline_R101"      # baseline_R101 (STARK-ST101) | baseline (STARK-ST50)
-    stage: int = 2                           # 1 = backbone + transformer + box head, 2 = classification head
+    stage: int = 1                           # 1 = backbone + transformer + box head, 2 = classification head
     datasets: List[str] = field(default_factory=lambda: ["got10k"])  # got10k(_full), coco, lasot, trackingnet
     dataset_ratios: Optional[List[float]] = None   # sampling weights; None = equal (as in STARK)
     val_datasets: List[str] = field(default_factory=lambda: ["got10k"])  # [] = no validation
-    init: Optional[str] = None               # stage 2: "official" (default) | stage-1 run name | checkpoint path
+    init: Optional[str] = None               # stage 2 (required): stage-1 run name | checkpoint path | "official"
     epochs: Optional[int] = None             # None = model YAML (stage 1: 500, stage 2: 50)
     lr_drop_epoch: Optional[int] = None      # None = model YAML (stage 1: 400, stage 2: 40)
     samples_per_epoch: Optional[int] = None  # None = model YAML (60000)
@@ -117,6 +118,10 @@ class TrainConfig:
             errors.append("effective_batch must be a multiple of micro_batch")
         if self.stage == 1 and self.init not in (None, "imagenet"):
             errors.append("stage 1 starts from ImageNet weights; init must be None or 'imagenet'")
+        if self.stage == 2 and not self.init:
+            errors.append("stage 2 needs init: the name of a finished stage-1 run (trained on the datasets you want), "
+                          "a checkpoint path, or 'official' (STARK's own weights, trained on LaSOT + GOT-10k + COCO + "
+                          "TrackingNet; with model_config='*_got10k_only': trained on GOT-10k only)")
         if self.name is not None and (not self.name or any(c in self.name for c in '/\\:*?"<>| ')):
             errors.append(f"name={self.name!r} cannot be used as a folder name")
         if errors:
@@ -142,7 +147,7 @@ class TrainConfig:
         if "got10k_only" in self.model_config:
             model += "got"
         parts = [model, f"stage{self.stage}", "+".join(self.datasets)]
-        if self.stage == 2 and self.init not in (None, "official"):
+        if self.stage == 2 and self.init:  # e.g. from-st101_stage1_coco_s42 or from-official
             parts.append("from-" + Path(self.init).name.split(".")[0])
         if self.epochs is not None:
             parts.append(f"e{self.epochs}")
@@ -216,7 +221,9 @@ def resolve_init(tc: TrainConfig, paths: Paths):
     """Returns (checkpoint path, keys to skip) for the initial weights of a stage-2 run; (None, None) for stage 1."""
     if tc.stage == 1:
         return None, None
-    init = tc.init or "official"
+    init = tc.init
+    if not init:
+        raise ValueError("stage 2 needs init: a stage-1 run name, a checkpoint path or 'official'")
     if init == "official":
         # The official STARK-ST checkpoint is the result of stage 2, whose backbone, transformer and box head are
         # the (frozen) stage-1 weights. Loading it without the classification head is identical to starting stage

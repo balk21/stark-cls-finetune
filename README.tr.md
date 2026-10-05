@@ -428,10 +428,16 @@ eğitim örneği, AdamW (lr 1e-4, backbone için × 0.1, weight decay 1e-4), nor
 10 (aşama 2) epoch'ta bir 10 000 örnekle doğrulama, seed 42, deterministik cuDNN. Template / arama karelerinin
 örneklenmesi, augmentation'lar ve loss'lar orijinal koddakilerle aynıdır.
 
-`init=None` / `"official"` ile aşama 2, **sınıflandırma başlığı çıkarılmış resmi STARK-ST checkpoint'inden**
-başlar. Bu checkpoint'in backbone, transformer ve kutu başlığı resmi aşama-1 ağırlıklarıdır (aşama 2 bunları
-dondurur). Yani bu, aşama 2'yi ayrıca yayımlanmamış resmi aşama-1 modelinden başlatmakla aynıdır.
-`init="<aşama-1 koşu adı>"` ise kendi aşama-1 koşunuzdan başlatır.
+**Aşama 2 her zaman `init` ister**; böylece dondurulan kısmın hangi veriyle eğitildiği her zaman açıktır:
+- `init="<aşama-1 koşu adı>"`: kendi aşama-1 koşunuz. Yalnızca belirli veri setleriyle eğitilmiş bir model için önce
+  aşama 1'i o veri setleriyle, sonra aşama 2'yi aynı veri setleriyle bu `init` ile çalıştırın
+  (örn. `st101_stage1_coco_s42` → `st101_stage2_coco_from-st101_stage1_coco_s42_s42`).
+- `init="official"`: **sınıflandırma başlığı çıkarılmış resmi STARK-ST checkpoint'i**. Bu checkpoint'in backbone,
+  transformer ve kutu başlığı resmi aşama-1 ağırlıklarıdır (aşama 2 bunları dondurur). Yani bu, aşama 2'yi ayrıca
+  yayımlanmamış resmi aşama-1 modelinden başlatmakla aynıdır. Bu ağırlıklar **dört veri setinin tamamıyla** (LaSOT,
+  GOT-10k, COCO, TrackingNet) eğitilmiştir; koşu adında `from-official` yazar. İstisna:
+  `model_config="baseline_R101_got10k_only"` (veya `baseline_got10k_only`) ile resmi ağırlıklar **yalnızca GOT-10k**
+  ile eğitilmiştir (9 335 train videosunun tamamı = `got10k_full`); bu, GOT-10k için aşama-1 koşusunu gereksiz kılar.
 
 ### 8.3 Eğitim veri setleri
 
@@ -501,10 +507,10 @@ Disk yetmezse hazırlık, ne kadar alan gerektiğini söyleyen bir mesajla durur
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Koşu klasörünün adı (`<train_outputs>/<name>/`). `None` ise parametrelerden üretilir: model, aşama, veri setleri, `from-<init>`, `e<epochs>`, `r<ratios>`, seed; örn. `st101_stage2_got10k+coco_s42`. |
+| `name` | `None` | Koşu klasörünün adı (`<train_outputs>/<name>/`). `None` ise parametrelerden üretilir: model, aşama, veri setleri, `from-<init>`, `e<epochs>`, `r<ratios>`, seed; örn. `st101_stage1_coco_s42`, `st101_stage2_coco_from-st101_stage1_coco_s42_s42`. |
 | `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) veya `baseline` (STARK-ST50); `model_configs/stark_st1/` (aşama 1) veya `stark_st2/` (aşama 2) altındaki YAML. `*_got10k_only` YAML'ları yalnızca veride farklıdır (onlarla `datasets=["got10k_full"]` kullanın); aşama 2'de `init` olarak resmi GOT-10k-only checkpoint'ini seçerler. |
 | `stage` | `2` | `1` veya `2` (§8.2). |
-| `init` | `None` | Aşama 2: `None` / `"official"` (sınıflandırma başlığı çıkarılmış resmi checkpoint, §8.2), tamamlanmış bir aşama-1 koşusunun adı veya bir checkpoint yolu. Aşama 1: `None` olmalı (ImageNet backbone). |
+| `init` | `None` | Aşama 1: `None` olmalı (ImageNet backbone). Aşama 2 (**zorunlu**): tamamlanmış bir aşama-1 koşusunun adı, bir checkpoint yolu veya `"official"` (sınıflandırma başlığı çıkarılmış, dört veri setiyle eğitilmiş resmi checkpoint; §8.2). |
 | `datasets` | `["got10k"]` | `got10k` (veya `got10k_full`), `coco`, `lasot`, `trackingnet` değerlerinin boş olmayan herhangi bir kombinasyonu. Sıra önemli değildir (STARK'ın sırasına getirilir). |
 | `dataset_ratios` | `None` | Veri seti başına örnekleme ağırlığı (`datasets` ile aynı sırada). `None` = eşit ağırlık (STARK'taki gibi): her eğitim örneği önce bu ağırlıklarla bir veri seti, sonra o veri setinden bir video seçer. |
 | `val_datasets` | `["got10k"]` | `["got10k"]` (GOT10K_votval) veya `[]` (doğrulama yok). |

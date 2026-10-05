@@ -427,10 +427,16 @@ samples per epoch, AdamW with lr 1e-4 (backbone × 0.1) and weight decay 1e-4, g
 validation on 10 000 samples every 20 (stage 1) / 10 (stage 2) epochs, seed 42, cuDNN deterministic. The
 sampling of template / search frames, the augmentations and the losses are those of the original code.
 
-Stage 2 initialised with `init=None` / `"official"` starts from the **official STARK-ST checkpoint without its
-classification head**. Its backbone, transformer and box head are the official stage-1 weights (stage 2 freezes
-them), so this is the same as starting stage 2 from the official stage-1 model, which is not published separately.
-`init="<stage-1 run name>"` starts from your own stage-1 run.
+**Stage 2 always needs `init`**, so it is always clear which data the frozen part was trained on:
+- `init="<stage-1 run name>"`: your own stage-1 run. For a model trained only on certain datasets, run stage 1 on
+  them, then stage 2 on the same datasets with this `init`
+  (e.g. `st101_stage1_coco_s42` → `st101_stage2_coco_from-st101_stage1_coco_s42_s42`).
+- `init="official"`: the **official STARK-ST checkpoint without its classification head**. Its backbone, transformer
+  and box head are the official stage-1 weights (stage 2 freezes them), so this is the same as starting stage 2 from
+  the official stage-1 model, which is not published separately. These weights were trained on **all four datasets**
+  (LaSOT, GOT-10k, COCO, TrackingNet); the run name says `from-official`. Exception: with
+  `model_config="baseline_R101_got10k_only"` (or `baseline_got10k_only`) the official weights were trained on
+  **GOT-10k only** (all 9 335 train videos = `got10k_full`), which saves the GOT-10k stage-1 run.
 
 ### 8.3 Training datasets
 
@@ -500,10 +506,10 @@ much is needed.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Run folder name (`<train_outputs>/<name>/`). If `None`, generated from the parameters: model, stage, datasets, `from-<init>`, `e<epochs>`, `r<ratios>`, seed; e.g. `st101_stage2_got10k+coco_s42`. |
+| `name` | `None` | Run folder name (`<train_outputs>/<name>/`). If `None`, generated from the parameters: model, stage, datasets, `from-<init>`, `e<epochs>`, `r<ratios>`, seed; e.g. `st101_stage1_coco_s42`, `st101_stage2_coco_from-st101_stage1_coco_s42_s42`. |
 | `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) or `baseline` (STARK-ST50); the YAML in `model_configs/stark_st1/` (stage 1) or `stark_st2/` (stage 2). The `*_got10k_only` YAMLs only differ in the data (use `datasets=["got10k_full"]` with them); for stage 2 they select the official GOT-10k-only checkpoint as `init`. |
 | `stage` | `2` | `1` or `2` (§8.2). |
-| `init` | `None` | Stage 2: `None` / `"official"` (official checkpoint without the classification head, §8.2), the name of a finished stage-1 run, or a checkpoint path. Stage 1: must be `None` (ImageNet backbone). |
+| `init` | `None` | Stage 1: must be `None` (ImageNet backbone). Stage 2 (**required**): the name of a finished stage-1 run, a checkpoint path, or `"official"` (official checkpoint without the classification head, trained on all four datasets; §8.2). |
 | `datasets` | `["got10k"]` | Any non-empty combination of `got10k` (or `got10k_full`), `coco`, `lasot`, `trackingnet`. The order does not matter (it is normalised to STARK's order). |
 | `dataset_ratios` | `None` | Sampling weight per dataset (same order as `datasets`). `None` = equal weights, as in STARK: each training sample first picks a dataset with these weights, then a video in it. |
 | `val_datasets` | `["got10k"]` | `["got10k"]` (GOT10K_votval) or `[]` (no validation). |
