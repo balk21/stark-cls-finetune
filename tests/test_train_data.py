@@ -61,6 +61,24 @@ def test_got10k_nested_archives(tmp):
 
 
 @_with_small_counts
+def test_got10k_same_archive_twice_is_extracted_once(tmp):
+    # e.g. "Copy of full_data.zip" (own copy) and "full_data.zip" (a shortcut to the shared file) in the same folder
+    arch = tmp / "archives" / "got10k"
+    arch.mkdir(parents=True)
+    with zipfile.ZipFile(arch / "Copy of full_data.zip", "w") as z:
+        z.writestr("full_data/train_data/GOT-10k_Train_split_01.zip", _split_zip(NAMES))
+    (arch / "full_data.zip").write_bytes((arch / "Copy of full_data.zip").read_bytes())
+    extracted, original = [], td.extract
+    td.extract = lambda a, *args, **kw: (extracted.append(a.name), original(a, *args, **kw))[1]
+    try:
+        train = Path(td.prepare(["got10k"], tmp / "data", tmp / "archives")["got10k"])
+    finally:
+        td.extract = original
+    assert extracted[0] == "Copy of full_data.zip" and "full_data.zip" not in extracted
+    assert sorted(p.name for p in train.iterdir() if p.is_dir()) == NAMES
+
+
+@_with_small_counts
 def test_got10k_split_archives_and_errors(tmp):
     arch = tmp / "archives" / "got10k"
     arch.mkdir(parents=True)

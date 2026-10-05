@@ -21,6 +21,7 @@ renamed when it is complete, so an interrupted preparation never leaves a half-e
 folder that already has the expected layout is only read, never modified.
 """
 import fnmatch
+import hashlib
 import json
 import os
 import re
@@ -193,6 +194,33 @@ def _uncompressed_size(archive: Path, members=None) -> int:
     return archive.stat().st_size * (1 if archive.name.lower().endswith(".tar") else 2)
 
 
+def _without_duplicates(archives):
+    """The same archive twice, e.g. your copy and a shortcut of full_data.zip on Google Drive, is used only once.
+    Zips count as the same if size, member names and CRCs match (only the zip's directory is read)."""
+    by_size = {}
+    for a in archives:
+        by_size.setdefault(a.stat().st_size, []).append(a)
+    kept, seen = [], {}
+    for a in archives:
+        key = a
+        if len(by_size[a.stat().st_size]) > 1 and a.name.lower().endswith(".zip"):
+            h = hashlib.sha1()
+            try:
+                with zipfile.ZipFile(a) as z:
+                    for i in z.infolist():
+                        h.update(f"{i.filename}\0{i.CRC}\n".encode())
+            except (zipfile.BadZipFile, OSError) as e:
+                raise _read_error(a, e) from None
+            key = (a.stat().st_size, h.hexdigest())
+        if key in seen:
+            _log(f"Skipping {a.name}: the same archive as {seen[key].name} (one of them can be removed from "
+                 f"{a.parent})")
+            continue
+        seen[key] = a
+        kept.append(a)
+    return kept
+
+
 def _check_space(where: Path, needed: int, what: str):
     probe = where
     while not probe.exists():
@@ -295,6 +323,7 @@ def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=
             "(README, section 8.3).\nThe links come by e-mail after a free registration at "
             "http://got-10k.aitestunion.com/downloads ; download links or archive paths can also be passed as "
             "got10k_urls.")
+    archives = _without_duplicates(archives)
     tmp = train_dir.parent / TMP_NAME
     if tmp.exists():
         shutil.rmtree(tmp)
