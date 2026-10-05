@@ -286,10 +286,15 @@ def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=
             raise FileNotFoundError(f"GOT-10k source {src!r} is neither a URL nor an existing archive / folder")
     archives = sorted(set(archives + (_walk(archive_dir)[0] if archive_dir.is_dir() else [])))
     if not archives:
+        archive_dir.mkdir(parents=True, exist_ok=True)  # so the folder to put the archives into exists
         raise FileNotFoundError(
-            f"No GOT-10k archives in {archive_dir}.\nGOT-10k needs a (free) registration at "
-            "http://got-10k.aitestunion.com/downloads . Then either pass the download links from the e-mail (or "
-            "paths of the archives) as got10k_urls, or put the train archives into that folder.")
+            f"No GOT-10k archive in {archive_dir} (the folder exists now, it is empty).\n"
+            "Put the GOT-10k train archives (e.g. the official full_data.zip) into this folder and run again. "
+            "On Colab with a Google Drive link: open the link in the browser -> 'Add shortcut to Drive' -> "
+            "right-click the shortcut -> 'Make a copy' -> move the copy ('Copy of full_data.zip') into this folder "
+            "(README, section 8.3).\nThe links come by e-mail after a free registration at "
+            "http://got-10k.aitestunion.com/downloads ; download links or archive paths can also be passed as "
+            "got10k_urls.")
     tmp = train_dir.parent / TMP_NAME
     if tmp.exists():
         shutil.rmtree(tmp)
