@@ -26,6 +26,7 @@ ROOT_KEY = {"got10k": "got10k", "got10k_full": "got10k", "coco": "coco", "lasot"
 # normalised: ["coco", "got10k"] and ["got10k", "coco"] are the same run.
 STARK_ORDER = ["lasot", "got10k", "got10k_full", "coco", "trackingnet"]
 STAGE_DIR = {1: "stark_st1", 2: "stark_st2"}
+SEED = 42  # STARK's training seed; every run uses it
 
 
 @dataclass
@@ -36,7 +37,7 @@ class TrainConfig:
     datasets: List[str] = field(default_factory=lambda: ["got10k"])  # got10k(_full), coco, lasot, trackingnet
     dataset_ratios: Optional[List[float]] = None   # sampling weights; None = equal (as in STARK)
     val_datasets: List[str] = field(default_factory=lambda: ["got10k"])  # [] = no validation
-    init: Optional[str] = None               # stage 2: None = our stage-1 run with the same model, datasets and seed
+    init: Optional[str] = None               # stage 2: None = our stage-1 run with the same model and datasets
                                              #   | another stage-1 run name | "official" (STARK's weights) | path
     epochs: Optional[int] = None             # None = model YAML (stage 1: 500, stage 2: 50)
     lr_drop_epoch: Optional[int] = None      # None = model YAML (stage 1: 400, stage 2: 40)
@@ -46,7 +47,6 @@ class TrainConfig:
     micro_batch: int = 16                    # samples per forward/backward pass; effective_batch / micro_batch
                                              # passes are accumulated per optimizer step
     num_workers: int = 8                     # data loading processes
-    seed: int = 42                           # STARK default
     val_interval: Optional[int] = None       # None = model YAML (stage 1: 20, stage 2: 10)
     keep_every: Optional[int] = None         # keep a numbered checkpoint every N epochs (None: 50 / 10)
 
@@ -121,12 +121,12 @@ class TrainConfig:
     def own_stage1(self) -> str:
         """Default name of the stage-1 run of this family, i.e. of the same parameters with stage=1 (the default init
         of stage 2)."""
-        return f"{self.family}_stage1" + (f"_e{self.epochs}" if self.epochs is not None else "") + f"_s{self.seed}"
+        return f"{self.family}_stage1" + (f"_e{self.epochs}" if self.epochs is not None else "")
 
     @property
     def run_name(self) -> str:
-        """e.g. st101_coco_stage1_s42, st101_coco_stage2_s42 (on our own stage 1), st101_coco_stage2_on-official_s42
-        (on STARK's weights), st101_coco_stage2_from-<run>_s42 (on another stage-1 run)."""
+        """e.g. st101_coco_stage1, st101_coco_stage2 (on our own stage 1), st101_coco_stage2_on-official (on STARK's
+        weights), st101_coco_stage2_from-<run> (on another stage-1 run)."""
         if self.name:
             return self.name
         parts = [self.family, f"stage{self.stage}"]
@@ -137,7 +137,6 @@ class TrainConfig:
                 parts.append("on-official" + ("-got10k" if "got10k_only" in self.model_config else ""))
             else:
                 parts.append("from-" + Path(self.init).name.split(".")[0])
-        parts.append(f"s{self.seed}")
         return "_".join(parts)
 
     def to_dict(self) -> dict:
@@ -145,6 +144,10 @@ class TrainConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "TrainConfig":
+        data = dict(data)
+        if "seed" in data:  # earlier parameter; every run uses SEED
+            if coerce("seed", data.pop("seed"), int) != SEED:
+                raise ValueError(f"The training seed is fixed ({SEED}, the STARK default)")
         types = {f.name: f.type for f in fields(cls)}
         unknown = set(data) - set(types)
         if unknown:

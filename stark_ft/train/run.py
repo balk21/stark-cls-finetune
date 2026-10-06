@@ -16,7 +16,7 @@ Run folder (<train_outputs>/<run name>/):
     tensorboard/         TensorBoard logs
     final.pth.tar        final weights (written when training finishes)
 Our runs are kept apart from STARK's published training: stage 1 starts from ImageNet, stage 2 by default from our
-own stage-1 run of the same family (model + datasets + seed), so the result is trained only on the run's datasets
+own stage-1 run of the same family (model + datasets), so the result is trained only on the run's datasets
 (origin "imagenet"). Stage 2 on STARK's weights must be asked for (init="official"); such runs are named
 "..._on-official_..." and listed separately (origin "official"). A finished stage-2 run is tested with
 weights="<run name>" (stark_ft/weights.py). Nothing is written to the `checkpoints` folder.
@@ -36,7 +36,7 @@ import torch
 from stark_ft.common import code_hash
 from stark_ft.paths import REPO_ROOT, Paths, get_paths
 from stark_ft.setup_utils import download_checkpoints
-from stark_ft.train.config import ROOT_KEY, TRAIN_DATASETS, VAL_DATASETS, TrainConfig
+from stark_ft.train.config import ROOT_KEY, SEED, TRAIN_DATASETS, VAL_DATASETS, TrainConfig
 from stark_ft.weights import read_run
 
 # Code that determines the training result (the parameters themselves are compared via train_config.json)
@@ -216,7 +216,7 @@ def run_training(tc: TrainConfig, paths: Paths = None, overwrite: bool = False) 
     if not meta_path.is_file():
         meta_path.write_text(json.dumps(meta, indent=2))
 
-    _init_seeds(tc.seed)
+    _init_seeds(SEED)
     import cv2
     cv2.setNumThreads(0)  # as in the original run_training.py (avoids OpenCV crashes in data workers)
 

@@ -51,12 +51,12 @@ The official STARK weights and the VOT-LT2020 sequences are downloaded automatic
 ## Train
 
 ```bash
-# STARK-ST101 on GOT-10k + COCO: stage 1 (backbone, transformer, box head) from ImageNet -> st101_got10k+coco_stage1_s42
+# STARK-ST101 on GOT-10k + COCO: stage 1 (backbone, transformer, box head) from ImageNet -> st101_got10k+coco_stage1
 python -m stark_ft train --set 'datasets=[got10k, coco]'
-# stage 2 (classification head) on top of our stage 1                               -> st101_got10k+coco_stage2_s42
+# stage 2 (classification head) on top of our stage 1                               -> st101_got10k+coco_stage2
 python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2
 # progress / all weights (official and trained here)
-python -m stark_ft train-report st101_got10k+coco_stage1_s42
+python -m stark_ft train-report st101_got10k+coco_stage1
 python -m stark_ft weights
 ```
 
@@ -73,9 +73,9 @@ Details: [docs/train.md](docs/train.md).
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
 # the same with weights trained here
-python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2_s42
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2
 # compare experiments
-python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_s42_base_int100_bull
+python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_base_int100_bull
 ```
 
 `weights`: `official` (STARK's, default), a stage-2 run trained here (`python -m stark_ft weights` lists them) or a

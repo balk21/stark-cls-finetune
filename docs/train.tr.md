@@ -25,7 +25,7 @@ GOT-10k, COCO, LaSOT ve TrackingNet'in herhangi bir kombinasyonuyla.
 
 İki aşamada da (model YAML'ları `model_configs/stark_st1/` ve `model_configs/stark_st2/`): epoch başına 60 000
 eğitim örneği, AdamW (lr 1e-4, backbone × 0.1, weight decay 1e-4), norm 0.1'de gradyan kırpma, 20 (aşama 1) / 10
-(aşama 2) epoch'ta bir 10 000 örnekle doğrulama, seed 42, deterministik cuDNN. Kare örnekleme, augmentation'lar ve
+(aşama 2) epoch'ta bir 10 000 örnekle doğrulama, deterministik cuDNN. Kare örnekleme, augmentation'lar ve
 loss'lar orijinal koddakilerdir.
 
 ## Bizim koşularımız ve resmi ağırlıklar
@@ -36,8 +36,8 @@ eğitilmiş ağırlıklar yayımlar. Burada bunlar yalnızca oldukları gibi kul
 
 | Köken | Nasıl | Koşu adı | Listedeki başlık |
 |---|---|---|---|
-| ImageNet'ten | aşama 1 ImageNet backbone'undan, aşama 2 kendi aşama 1'imizin üzerine (varsayılan) | `st101_coco_stage1_s42`, `st101_coco_stage2_s42` | "trained here from ImageNet" |
-| resmi ağırlıkların üzerine | `init="official"` ile aşama 2: sınıflandırma başlığı çıkarılmış resmi checkpoint | `st101_coco_stage2_on-official_s42` | "trained here on top of the official STARK weights" |
+| ImageNet'ten | aşama 1 ImageNet backbone'undan, aşama 2 kendi aşama 1'imizin üzerine (varsayılan) | `st101_coco_stage1`, `st101_coco_stage2` | "trained here from ImageNet" |
+| resmi ağırlıkların üzerine | `init="official"` ile aşama 2: sınıflandırma başlığı çıkarılmış resmi checkpoint | `st101_coco_stage2_on-official` | "trained here on top of the official STARK weights" |
 | başka bir dosyanın üzerine | `init="<checkpoint yolu>"` ile aşama 2 | `..._from-<dosya>_...` | "trained here on top of another checkpoint file" |
 
 Koşular **aile**ye göre gruplanır (model + veri setleri + örnekleme oranları): `st101_coco`, `st101_got10k+coco`, ...
@@ -94,8 +94,8 @@ python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL_V
 
 ```bash
 # GOT-10k + COCO ile STARK-ST101: ImageNet'ten aşama 1, ardından onun üzerine aşama 2 (STARK-ST50: model_config=baseline)
-python -m stark_ft train --set 'datasets=[got10k, coco]'               # st101_got10k+coco_stage1_s42
-python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2 # st101_got10k+coco_stage2_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]'               # st101_got10k+coco_stage1
+python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2 # st101_got10k+coco_stage2
 # STARK'ın ağırlıkları üzerinde yalnızca sınıflandırma başlığı (on-official olarak işaretlenir)
 python -m stark_ft train --set 'datasets=[coco]' --set stage=2 --set init=official --set 'val_datasets=[]'
 python -m stark_ft train --config configs/train_example.yaml
@@ -113,11 +113,11 @@ gösterir.
 | Hedef | `stage` | `datasets` | `init` | `val_datasets` |
 |---|---|---|---|---|
 | COCO, aşama 1 | `1` | `["coco"]` | `None` | `[]` |
-| COCO, aşama 2 | `2` | `["coco"]` | `None` (= `st101_coco_stage1_s42`) | `[]` |
+| COCO, aşama 2 | `2` | `["coco"]` | `None` (= `st101_coco_stage1`) | `[]` |
 | GOT-10k, aşama 1 | `1` | `["got10k"]` | `None` | `["got10k"]` |
-| GOT-10k, aşama 2 | `2` | `["got10k"]` | `None` (= `st101_got10k_stage1_s42`) | `["got10k"]` |
+| GOT-10k, aşama 2 | `2` | `["got10k"]` | `None` (= `st101_got10k_stage1`) | `["got10k"]` |
 | GOT-10k + COCO, aşama 1 | `1` | `["got10k", "coco"]` | `None` | `["got10k"]` |
-| GOT-10k + COCO, aşama 2 | `2` | `["got10k", "coco"]` | `None` (= `st101_got10k+coco_stage1_s42`) | `["got10k"]` |
+| GOT-10k + COCO, aşama 2 | `2` | `["got10k", "coco"]` | `None` (= `st101_got10k+coco_stage1`) | `["got10k"]` |
 | STARK'ın ağırlıkları üzerinde yalnızca sınıflandırma başlığı | `2` | örn. `["coco"]` | `"official"` | `[]` |
 | Yalnızca GOT-10k, aşama 1 olmadan | `2` | `["got10k_full"]` | `"official"`, `model_config="baseline_R101_got10k_only"` ile | `["got10k"]` |
 
@@ -135,7 +135,7 @@ GOT-10k videosunun tamamını kullandı.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Koşu klasörü `<train_outputs>/<name>/`. `None`: `<aile>_stage<N>[_e<epochs>][_on-official / _from-<init>]_s<seed>`, örn. `st101_got10k+coco_stage1_s42`. |
+| `name` | `None` | Koşu klasörü `<train_outputs>/<name>/`. `None`: `<aile>_stage<N>[_e<epochs>][_on-official / _from-<init>]`, örn. `st101_got10k+coco_stage1`. |
 | `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) veya `baseline` (STARK-ST50). `*_got10k_only` config'leri yalnızca veride farklıdır (`datasets=["got10k_full"]` ile kullanın); aşama 2'de `init` olarak resmi GOT-10k-only checkpoint'ini seçerler. |
 | `stage` | `1` | `1` veya `2`. |
 | `init` | `None` | Aşama 1: `None` (ImageNet backbone). Aşama 2: `None` = aynı parametrelerle bizim aşama-1 koşumuz, başka bir aşama-1 koşu adı, `"official"` (STARK'ın ağırlıkları; `on-official` olarak işaretlenir) ya da bir checkpoint yolu. |
@@ -150,7 +150,6 @@ GOT-10k videosunun tamamını kullandı.
 | `effective_batch` | `128` | Optimizer adımı başına örnek. 128 = orijinal (8 GPU × 16); değiştirmek eğitimi değiştirir. |
 | `micro_batch` | `16` | Bir GPU geçişindeki örnek sayısı; `effective_batch / micro_batch` geçiş biriktirilir. Yalnızca bellek ve hız buna bağlıdır. |
 | `num_workers` | `8` | Veri yükleme süreçleri. |
-| `seed` | `42` | STARK varsayılanı. |
 | `keep_every` | `None` | Her N epoch'ta ağırlıkları sakla: 50 / 10. |
 
 ## Koşu klasörü ve devam etme

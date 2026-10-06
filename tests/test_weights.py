@@ -35,9 +35,9 @@ def test_paths_of_weights():
         assert weights.path_of("official", "stark_st", "baseline_R101", paths) == official
         assert weights.path_of("official", "stark_s", "baseline", paths) == \
             paths.checkpoints / "stark_s" / "baseline" / "STARKS_ep0500.pth.tar"
-        run = paths.train_outputs / "st101_coco_stage2_s42" / "final.pth.tar"
-        assert weights.path_of("st101_coco_stage2_s42", "stark_st", "baseline_R101", paths) == run
-        assert weights.path_of("train:st101_coco_stage2_s42", "stark_st", "baseline_R101", paths) == run
+        run = paths.train_outputs / "st101_coco_stage2" / "final.pth.tar"
+        assert weights.path_of("st101_coco_stage2", "stark_st", "baseline_R101", paths) == run
+        assert weights.path_of("train:st101_coco_stage2", "stark_st", "baseline_R101", paths) == run
         assert weights.path_of("STARKSTcoco_ep0050.pth.tar", "stark_st", "baseline_R101", paths) == \
             official.parent / "STARKSTcoco_ep0050.pth.tar"
         assert weights.path_of("/x/y.pth.tar", "stark_st", "baseline_R101", paths) == Path("/x/y.pth.tar")
@@ -94,13 +94,13 @@ def test_experiment_config_weights():
     assert ExperimentConfig().weights == "official"
     # earlier parameter name `checkpoint` (parameter files and experiment.json of earlier experiments)
     assert ExperimentConfig.from_dict({"checkpoint": None}).weights == "official"
-    assert ExperimentConfig.from_dict({"checkpoint": "train:st101_coco_stage2_s42"}).weights == "st101_coco_stage2_s42"
+    assert ExperimentConfig.from_dict({"checkpoint": "train:st101_coco_stage2"}).weights == "st101_coco_stage2"
     assert ExperimentConfig.from_dict({"checkpoint": "STARKSTcoco_ep0050.pth.tar"}).weights == "STARKSTcoco_ep0050.pth.tar"
     # experiment names say which weights were used
     base = ExperimentConfig(ft_mode="none", sequences=["bull"])
     assert base.experiment_name == "st101_base_int100_bull"
-    assert ExperimentConfig(ft_mode="none", sequences=["bull"], weights="st101_coco_stage2_s42").experiment_name == \
-        "st101_coco_stage2_s42_base_int100_bull"
+    assert ExperimentConfig(ft_mode="none", sequences=["bull"], weights="st101_coco_stage2").experiment_name == \
+        "st101_coco_stage2_base_int100_bull"
     assert ExperimentConfig(ft_mode="none", weights="STARKSTcoco_ep0050.pth.tar").experiment_name == \
         "st101-STARKSTcoco_ep0050_base_int100"
 

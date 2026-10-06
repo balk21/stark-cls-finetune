@@ -92,12 +92,12 @@ RTX 3060 laptop GPU.
 | `weights` | Weights |
 |---|---|
 | `"official"` (default) | STARK's published weights for `model_config` (trained on LaSOT + GOT-10k + COCO + TrackingNet; `*_got10k_only`: GOT-10k). Downloaded to `<checkpoints>` automatically when first used. |
-| `"<run name>"` | A finished **stage-2** run trained here, e.g. `"st101_coco_stage2_s42"` ([train.md](train.md#our-runs-and-the-official-weights)). It must have the same `model_config`; stage-1 and unfinished runs are refused. |
+| `"<run name>"` | A finished **stage-2** run trained here, e.g. `"st101_coco_stage2"` ([train.md](train.md#our-runs-and-the-official-weights)). It must have the same `model_config`; stage-1 and unfinished runs are refused. |
 | file name / path | Any other checkpoint: a file name is looked up in `<checkpoints>/stark_st2/<model_config>/`, a value with `/` is a path. |
 
 `python -m stark_ft weights` (notebook: `nb.list_weights()`) lists them by origin: the official weights, runs trained
 here from ImageNet, and runs trained here on top of the official weights. `show` / `nb.describe` prints which weights a
-test will use. Experiment names start with the run name for trained weights (`st101_coco_stage2_s42_online_...`) and
+test will use. Experiment names start with the run name for trained weights (`st101_coco_stage2_online_...`) and
 with the model for the official ones (`st101_online_...`), so the results of different weights never mix.
 
 ## VOT-LT2020 sequences

@@ -25,7 +25,7 @@ batch size, on any combination of GOT-10k, COCO, LaSOT and TrackingNet.
 
 Both stages (model YAMLs in `model_configs/stark_st1/` and `model_configs/stark_st2/`): 60 000 training samples per
 epoch, AdamW with lr 1e-4 (backbone × 0.1) and weight decay 1e-4, gradient clipping at norm 0.1, validation on 10 000
-samples every 20 (stage 1) / 10 (stage 2) epochs, seed 42, deterministic cuDNN. Frame sampling, augmentations and
+samples every 20 (stage 1) / 10 (stage 2) epochs, deterministic cuDNN. Frame sampling, augmentations and
 losses are those of the original code.
 
 ## Our runs and the official weights
@@ -36,8 +36,8 @@ The runs of this repository are kept apart from that training:
 
 | Origin | How | Run name | Listed under |
 |---|---|---|---|
-| from ImageNet | stage 1 from the ImageNet backbone, stage 2 on our own stage 1 (default) | `st101_coco_stage1_s42`, `st101_coco_stage2_s42` | "trained here from ImageNet" |
-| on the official weights | stage 2 with `init="official"`: the official checkpoint without its classification head | `st101_coco_stage2_on-official_s42` | "trained here on top of the official STARK weights" |
+| from ImageNet | stage 1 from the ImageNet backbone, stage 2 on our own stage 1 (default) | `st101_coco_stage1`, `st101_coco_stage2` | "trained here from ImageNet" |
+| on the official weights | stage 2 with `init="official"`: the official checkpoint without its classification head | `st101_coco_stage2_on-official` | "trained here on top of the official STARK weights" |
 | on another file | stage 2 with `init="<checkpoint path>"` | `..._from-<file>_...` | "trained here on top of another checkpoint file" |
 
 Runs are grouped by **family** (model + datasets + sampling ratios): `st101_coco`, `st101_got10k+coco`, ... A
@@ -92,8 +92,8 @@ python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL_O
 
 ```bash
 # STARK-ST101 on GOT-10k + COCO: stage 1 from ImageNet, then stage 2 on top of it (STARK-ST50: model_config=baseline)
-python -m stark_ft train --set 'datasets=[got10k, coco]'               # st101_got10k+coco_stage1_s42
-python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2 # st101_got10k+coco_stage2_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]'               # st101_got10k+coco_stage1
+python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2 # st101_got10k+coco_stage2
 # only the classification head, on STARK's weights (marked on-official)
 python -m stark_ft train --set 'datasets=[coco]' --set stage=2 --set init=official --set 'val_datasets=[]'
 python -m stark_ft train --config configs/train_example.yaml
@@ -110,11 +110,11 @@ Notebook: `notebooks/train.ipynb`. The progress output shows samples/s, the epoc
 | Goal | `stage` | `datasets` | `init` | `val_datasets` |
 |---|---|---|---|---|
 | COCO, stage 1 | `1` | `["coco"]` | `None` | `[]` |
-| COCO, stage 2 | `2` | `["coco"]` | `None` (= `st101_coco_stage1_s42`) | `[]` |
+| COCO, stage 2 | `2` | `["coco"]` | `None` (= `st101_coco_stage1`) | `[]` |
 | GOT-10k, stage 1 | `1` | `["got10k"]` | `None` | `["got10k"]` |
-| GOT-10k, stage 2 | `2` | `["got10k"]` | `None` (= `st101_got10k_stage1_s42`) | `["got10k"]` |
+| GOT-10k, stage 2 | `2` | `["got10k"]` | `None` (= `st101_got10k_stage1`) | `["got10k"]` |
 | GOT-10k + COCO, stage 1 | `1` | `["got10k", "coco"]` | `None` | `["got10k"]` |
-| GOT-10k + COCO, stage 2 | `2` | `["got10k", "coco"]` | `None` (= `st101_got10k+coco_stage1_s42`) | `["got10k"]` |
+| GOT-10k + COCO, stage 2 | `2` | `["got10k", "coco"]` | `None` (= `st101_got10k+coco_stage1`) | `["got10k"]` |
 | Only the classification head, on STARK's weights | `2` | e.g. `["coco"]` | `"official"` | `[]` |
 | GOT-10k only, without stage 1 | `2` | `["got10k_full"]` | `"official"` with `model_config="baseline_R101_got10k_only"` | `["got10k"]` |
 
@@ -131,7 +131,7 @@ out by `got10k`.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Run folder `<train_outputs>/<name>/`. `None`: `<family>_stage<N>[_e<epochs>][_on-official / _from-<init>]_s<seed>`, e.g. `st101_got10k+coco_stage1_s42`. |
+| `name` | `None` | Run folder `<train_outputs>/<name>/`. `None`: `<family>_stage<N>[_e<epochs>][_on-official / _from-<init>]`, e.g. `st101_got10k+coco_stage1`. |
 | `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) or `baseline` (STARK-ST50). The `*_got10k_only` configs only differ in the data (use them with `datasets=["got10k_full"]`); in stage 2 they select the official GOT-10k-only checkpoint as `init`. |
 | `stage` | `1` | `1` or `2`. |
 | `init` | `None` | Stage 1: `None` (ImageNet backbone). Stage 2: `None` = our stage-1 run with the same parameters, another stage-1 run name, `"official"` (STARK's weights; marked `on-official`) or a checkpoint path. |
@@ -146,7 +146,6 @@ out by `got10k`.
 | `effective_batch` | `128` | Samples per optimizer step. 128 = original (8 GPUs × 16); changing it changes the training. |
 | `micro_batch` | `16` | Samples per GPU pass; `effective_batch / micro_batch` passes are accumulated. Only memory and speed depend on it. |
 | `num_workers` | `8` | Data loading processes. |
-| `seed` | `42` | STARK default. |
 | `keep_every` | `None` | Keep the weights every N epochs: 50 / 10. |
 
 ## Run folder and resuming

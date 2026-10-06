@@ -6,4 +6,3 @@ datasets: [got10k, coco]
 val_datasets: [got10k]
 effective_batch: 128
 micro_batch: 16
-seed: 42

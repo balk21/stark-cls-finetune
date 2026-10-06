@@ -25,25 +25,25 @@ def _expect_error(**kwargs):
 
 def test_defaults_and_run_name():
     tc = TrainConfig().validate()
-    assert (tc.stage, tc.model_config, tc.effective_batch, tc.micro_batch, tc.seed) == (1, "baseline_R101", 128, 16, 42)
+    assert (tc.stage, tc.model_config, tc.effective_batch, tc.micro_batch) == (1, "baseline_R101", 128, 16)
     assert tc.total_epochs == 500 and TrainConfig(stage=2).total_epochs == 50
     # runs are grouped by family (model + datasets): stage 1 and its stage 2
-    assert tc.run_name == "st101_got10k_stage1_s42"
-    assert TrainConfig(model_config="baseline", datasets=["coco"], epochs=3).run_name == "st50_coco_stage1_e3_s42"
+    assert tc.run_name == "st101_got10k_stage1"
+    assert TrainConfig(model_config="baseline", datasets=["coco"], epochs=3).run_name == "st50_coco_stage1_e3"
     s2 = TrainConfig(stage=2, datasets=["coco"])
-    assert s2.init == "st101_coco_stage1_s42" and s2.run_name == "st101_coco_stage2_s42"  # default: own stage 1
-    assert TrainConfig(stage=2, datasets=["coco"], init="st101_coco_stage1_s42").run_name == s2.run_name
+    assert s2.init == "st101_coco_stage1" and s2.run_name == "st101_coco_stage2"  # default: own stage 1
+    assert TrainConfig(stage=2, datasets=["coco"], init="st101_coco_stage1").run_name == s2.run_name
     quick = TrainConfig(stage=2, datasets=["coco"], epochs=1)  # the same parameters as stage 1 with epochs=1
-    assert quick.init == TrainConfig(datasets=["coco"], epochs=1).run_name == "st101_coco_stage1_e1_s42"
-    assert quick.run_name == "st101_coco_stage2_e1_s42"
-    assert TrainConfig(stage=2, datasets=["coco"], init="st101_got10k+coco_stage1_s42").run_name == \
-        "st101_coco_stage2_from-st101_got10k+coco_stage1_s42_s42"
+    assert quick.init == TrainConfig(datasets=["coco"], epochs=1).run_name == "st101_coco_stage1_e1"
+    assert quick.run_name == "st101_coco_stage2_e1"
+    assert TrainConfig(stage=2, datasets=["coco"], init="st101_got10k+coco_stage1").run_name == \
+        "st101_coco_stage2_from-st101_got10k+coco_stage1"
     # runs on STARK's weights (trained on all four datasets) are marked
-    assert TrainConfig(stage=2, datasets=["coco"], init="official").run_name == "st101_coco_stage2_on-official_s42"
+    assert TrainConfig(stage=2, datasets=["coco"], init="official").run_name == "st101_coco_stage2_on-official"
     assert TrainConfig(stage=2, datasets=["got10k_full"], init="official",
                        model_config="baseline_R101_got10k_only").run_name == \
-        "st101_got10k_full_stage2_on-official-got10k_s42"
-    assert TrainConfig(datasets=["coco", "got10k"], dataset_ratios=[2, 1]).run_name == "st101_got10k+coco_r1-2_stage1_s42"
+        "st101_got10k_full_stage2_on-official-got10k"
+    assert TrainConfig(datasets=["coco", "got10k"], dataset_ratios=[2, 1]).run_name == "st101_got10k+coco_r1-2_stage1"
     assert TrainConfig(name="my_run").run_name == "my_run"
 
 
@@ -83,8 +83,14 @@ def test_from_dict_and_file():
         raise AssertionError("unknown parameter accepted")
     with tempfile.TemporaryDirectory() as tmp:  # train_config.json written by a run: {"config": {...}, ...}
         path = Path(tmp) / "train_config.json"
-        path.write_text(json.dumps({"config": TrainConfig(seed=7).to_dict(), "code_hash": "x"}))
-        assert TrainConfig.from_file(path).seed == 7
+        path.write_text(json.dumps({"config": dict(TrainConfig(epochs=7).to_dict(), seed=42), "code_hash": "x"}))
+        assert TrainConfig.from_file(path).epochs == 7  # an earlier file with the (fixed) seed is still read
+    try:
+        TrainConfig.from_dict({"seed": 1})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("another seed accepted")
 
 
 def test_model_cfg_overrides():
@@ -129,8 +135,8 @@ def test_init_and_dataset_checks():
         assert resolve_init(TrainConfig(stage=1), paths) == (None, None, "imagenet")
         # stage 2 by default starts from our own stage-1 run of the same family; missing -> clear error
         info = describe(TrainConfig(stage=2, datasets=["coco"]), paths)
-        assert "st101_coco_stage1_s42" in info["init_error"] and "Train it first" in info["init_error"]
-        run = _run(paths, "st101_coco_stage1_s42", 1, datasets=["coco"])
+        assert "st101_coco_stage1" in info["init_error"] and "Train it first" in info["init_error"]
+        run = _run(paths, "st101_coco_stage1", 1, datasets=["coco"])
         assert resolve_init(TrainConfig(stage=2, datasets=["coco"]), paths) == (run / "final.pth.tar", (), "imagenet")
         # the origin is inherited along the chain; an unfinished or stage-2 run cannot be the init
         _run(paths, "s1_on_official", 1, origin="official", datasets=["coco"])

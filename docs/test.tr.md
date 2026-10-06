@@ -92,13 +92,13 @@ GPU'da ≈ 2 saat sürer.
 | `weights` | Ağırlıklar |
 |---|---|
 | `"official"` (varsayılan) | `model_config` için STARK'ın yayımladığı ağırlıklar (LaSOT + GOT-10k + COCO + TrackingNet ile eğitildi; `*_got10k_only`: GOT-10k). İlk kullanıldığında `<checkpoints>` klasörüne otomatik indirilir. |
-| `"<koşu adı>"` | Burada eğitilmiş, tamamlanmış bir **aşama-2** koşusu, örn. `"st101_coco_stage2_s42"` ([train.tr.md](train.tr.md#bizim-koşularımız-ve-resmi-ağırlıklar)). Aynı `model_config` ile kullanılmalıdır; aşama-1 ve tamamlanmamış koşular reddedilir. |
+| `"<koşu adı>"` | Burada eğitilmiş, tamamlanmış bir **aşama-2** koşusu, örn. `"st101_coco_stage2"` ([train.tr.md](train.tr.md#bizim-koşularımız-ve-resmi-ağırlıklar)). Aynı `model_config` ile kullanılmalıdır; aşama-1 ve tamamlanmamış koşular reddedilir. |
 | dosya adı / yol | Başka herhangi bir checkpoint: dosya adı `<checkpoints>/stark_st2/<model_config>/` içinde aranır, `/` içeren değer yoldur. |
 
 `python -m stark_ft weights` (notebook: `nb.list_weights()`) bunları kökenlerine göre listeler: resmi ağırlıklar,
 burada ImageNet'ten eğitilen koşular ve burada resmi ağırlıkların üzerine eğitilen koşular. `show` / `nb.describe` bir
 testin hangi ağırlıkları kullanacağını gösterir. Deney adları, eğitilmiş ağırlıklarda koşu adıyla
-(`st101_coco_stage2_s42_online_...`), resmi ağırlıklarda modelle (`st101_online_...`) başlar; böylece farklı
+(`st101_coco_stage2_online_...`), resmi ağırlıklarda modelle (`st101_online_...`) başlar; böylece farklı
 ağırlıkların sonuçları asla karışmaz.
 
 ## VOT-LT2020 dizileri

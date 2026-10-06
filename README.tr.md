@@ -51,12 +51,12 @@ Resmi STARK ağırlıkları ve VOT-LT2020 dizileri, bir test onları kullandığ
 ## Eğitim
 
 ```bash
-# GOT-10k + COCO ile STARK-ST101: ImageNet'ten aşama 1 (backbone, transformer, kutu başlığı) -> st101_got10k+coco_stage1_s42
+# GOT-10k + COCO ile STARK-ST101: ImageNet'ten aşama 1 (backbone, transformer, kutu başlığı) -> st101_got10k+coco_stage1
 python -m stark_ft train --set 'datasets=[got10k, coco]'
-# kendi aşama 1'imizin üzerine aşama 2 (sınıflandırma başlığı)                           -> st101_got10k+coco_stage2_s42
+# kendi aşama 1'imizin üzerine aşama 2 (sınıflandırma başlığı)                           -> st101_got10k+coco_stage2
 python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2
 # ilerleme / tüm ağırlıklar (resmi ve burada eğitilenler)
-python -m stark_ft train-report st101_got10k+coco_stage1_s42
+python -m stark_ft train-report st101_got10k+coco_stage1
 python -m stark_ft weights
 ```
 
@@ -73,9 +73,9 @@ Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Ayrıntılar: [docs/
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
 # aynısı, burada eğitilmiş ağırlıklarla
-python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2_s42
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2
 # deneyleri karşılaştırma
-python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_s42_base_int100_bull
+python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_base_int100_bull
 ```
 
 `weights`: `official` (STARK'ın ağırlıkları, varsayılan), burada eğitilmiş bir aşama-2 koşusu (`python -m stark_ft weights`
