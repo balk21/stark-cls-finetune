@@ -54,7 +54,7 @@ freezes them), trained on all four datasets: such a run is not "trained on fewer
 | `got10k` | `GOT10K_vottrain`: GOT-10k train without the 1000 videos that overlap with VOT (7 086 videos) | 73.9 GB (GOT-10k train folder) | from the official archives (registration, see below) |
 | `got10k_full` | `GOT10K_train_full`: all 9 335 GOT-10k train videos (GOT-10k protocol, `*_got10k_only` configs) | (same folder) | (same) |
 | `coco` | `COCO17`: COCO 2017 train (118 287 images; every object is a one-frame "video") | 20.1 GB | automatic (images.cocodataset.org) |
-| `lasot` | `LASOT`, train split (1 120 videos) | very large | manual |
+| `lasot` | `LASOT`, train split (1 120 videos) | ≈ 227 GB | manual |
 | `trackingnet` | `TRACKINGNET` (≈ 30 000 videos) | ≈ 1 TB | manual |
 
 Validation (`val_datasets=["got10k"]`) uses `GOT10K_votval`, 1 249 GOT-10k train videos disjoint from

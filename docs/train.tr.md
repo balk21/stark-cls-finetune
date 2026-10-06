@@ -55,7 +55,7 @@ setiyle eğitilmiş" sayılmaz, bu yüzden adı ayrıdır.
 | `got10k` | `GOT10K_vottrain`: VOT ile örtüşen 1000 video çıkarılmış GOT-10k train (7 086 video) | 73.9 GB (GOT-10k train klasörü) | resmi arşivlerden (kayıt gerekir, aşağıya bakın) |
 | `got10k_full` | `GOT10K_train_full`: GOT-10k train'in 9 335 videosunun tamamı (GOT-10k protokolü, `*_got10k_only` config'leri) | (aynı klasör) | (aynı) |
 | `coco` | `COCO17`: COCO 2017 train (118 287 görüntü; her nesne tek karelik bir "video") | 20.1 GB | otomatik (images.cocodataset.org) |
-| `lasot` | `LASOT`, train bölümü (1 120 video) | çok büyük | elle |
+| `lasot` | `LASOT`, train bölümü (1 120 video) | ≈ 227 GB | elle |
 | `trackingnet` | `TRACKINGNET` (≈ 30 000 video) | ≈ 1 TB | elle |
 
 Doğrulama (`val_datasets=["got10k"]`), `GOT10K_vottrain` ile kesişmeyen 1 249 GOT-10k train videosundan oluşan
