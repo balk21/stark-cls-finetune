@@ -8,6 +8,7 @@ head, and evaluated with COCO-style detection metrics.
 - [Method](#method)
 - [Running](#running)
 - [Common settings](#common-settings)
+- [Weights](#weights)
 - [VOT-LT2020 sequences](#vot-lt2020-sequences)
 - [Parameters](#parameters)
 - [Outputs](#outputs)
@@ -50,12 +51,12 @@ frame + target box
 ## Running
 
 ```bash
-python -m stark_ft download-checkpoints --model-config baseline_R101   # official STARK-ST101 (also: baseline = ST50)
-python -m stark_ft smoke --frames 50                                   # quick check without vot-toolkit (fetches ballet)
+python -m stark_ft weights                                             # official weights and runs trained here
+python -m stark_ft smoke --frames 50                                   # optional quick check (fetches ballet)
 
-python -m stark_ft test --set ft_mode=none                             # plain STARK-ST
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # plain STARK-ST, official weights
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
-python -m stark_ft test --set checkpoint=train:<run name>              # a model trained with stark_ft train
+python -m stark_ft test --set 'sequences=[bull]' --set weights=<run name>   # a model trained with stark_ft train
 python -m stark_ft analyze outputs/<experiment> --score-thr 0.5        # metrics again, without tracking
 python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png
 ```
@@ -63,7 +64,7 @@ python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx -
 Notebooks: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. All 50 sequences (≈ 215 k frames) take ≈ 2 h on an
 RTX 3060 laptop GPU.
 
-- `show` (notebook: `nb.describe`) prints the output folder, the checkpoint and which sequences will be downloaded.
+- `show` (notebook: `nb.describe`) prints the output folder, the weights and which sequences will be downloaded.
 - Running the same `name` with the same parameters again **resumes**: completed sequences are skipped (that is why
   `vot evaluate` runs without `-f`; every experiment has its own VOT workspace). `vot analysis` is not used; metrics
   are always computed from the raw results.
@@ -82,7 +83,22 @@ RTX 3060 laptop GPU.
 | Strength of the fine-tuning | `ft_lr`, `ft_epochs_init` (steps on frame 1), `ft_epochs_online` (steps per update) |
 | Sequences | `sequences=["bull", "ballet"]` or `"all"` |
 | STARK-ST50 instead of ST101 | `model_config="baseline"` |
-| A model trained with this repository | `checkpoint="train:<stage-2 run name>"` (same `model_config`) |
+| A model trained with this repository | `weights="<stage-2 run name>"` (same `model_config`) |
+
+## Weights
+
+`weights` selects the network weights of a test; the experiment name and `experiment.json` record them.
+
+| `weights` | Weights |
+|---|---|
+| `"official"` (default) | STARK's published weights for `model_config` (trained on LaSOT + GOT-10k + COCO + TrackingNet; `*_got10k_only`: GOT-10k). Downloaded to `<checkpoints>` automatically when first used. |
+| `"<run name>"` | A finished **stage-2** run trained here, e.g. `"st101_coco_stage2_s42"` ([train.md](train.md#our-runs-and-the-official-weights)). It must have the same `model_config`; stage-1 and unfinished runs are refused. |
+| file name / path | Any other checkpoint: a file name is looked up in `<checkpoints>/stark_st2/<model_config>/`, a value with `/` is a path. |
+
+`python -m stark_ft weights` (notebook: `nb.list_weights()`) lists them by origin: the official weights, runs trained
+here from ImageNet, and runs trained here on top of the official weights. `show` / `nb.describe` prints which weights a
+test will use. Experiment names start with the run name for trained weights (`st101_coco_stage2_s42_online_...`) and
+with the model for the official ones (`st101_online_...`), so the results of different weights never mix.
 
 ## VOT-LT2020 sequences
 
@@ -107,7 +123,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated, e.g. `st101_online_pos_lr0.0001_i15_o1_int100_s0`. |
 | `model` | `"stark_st"` | `"stark_st"` or `"stark_s"` (no score; reports 1.0; needs `ft_mode="none"`). |
 | `model_config` | `"baseline_R101"` | YAML in `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) or `model_configs/stark_s/`. |
-| `checkpoint` | `None` | `None`: official file. A file name is looked up in `<checkpoints>/stark_st2/<model_config>/`; a value with `/` is a path; `"train:<run name>"` is a training run's `final.pth.tar`. |
+| `weights` | `"official"` | `"official"`, a stage-2 run trained here, or a checkpoint file / path (see [Weights](#weights)). (Earlier name: `checkpoint`.) |
 | `sequences` | `"all"` | `"all"` (50 sequences) or a list, e.g. `["bull", "ballet"]`; missing ones are downloaded. |
 | `update_interval` | `100` | Template update attempt every N frames; `99999` = never. (`TEST.UPDATE_INTERVALS` of the YAMLs is not used.) |
 | `update_conf_thr` | `0.5` | Update only if the score is greater than this (STARK: 0.5). |
@@ -136,7 +152,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 
 | File | Content |
 |---|---|
-| `experiment.json` | Parameters, checkpoint, dataset, sequences, git commit, code hash, date |
+| `experiment.json` | Parameters (incl. `weights`), checkpoint file, dataset, sequences, git commit, code hash, date |
 | `run.log`, `run_status.json` | vot-toolkit output; completed / missing sequences (tracker errors: `vot_workspace/logs/`) |
 | `predictions/<seq>/<seq>_001.txt` | Box per frame `x,y,w,h` (first line `1`: init frame, VOT format) |
 | `predictions/<seq>/<seq>_001_confidence.value`, `_time.value` | Score and time per frame |
@@ -234,8 +250,8 @@ With `ft_mode="none"` the output is bit-identical to the original `STARK_ST` (15
 
 | Symptom | Fix |
 |---|---|
-| `Checkpoint not found` | `download-checkpoints`, or put the file where the message says. |
-| Google Drive "quota exceeded" for a checkpoint | Download it in a browser from the link in the message and put it where the message says. |
+| `No training run '...'` / `is a stage-1 run` / `was trained with model_config=...` | Choose a finished stage-2 run from `python -m stark_ft weights`, with its `model_config`. |
+| Google Drive "quota exceeded" for the official weights | Download the file in a browser from the link in the message and put it where the message says. |
 | `Unknown sequence(s): [...]` | A typo in `sequences`; the message lists the 50 VOT-LT2020 names. |
 | VOT sequence download fails / `Checksum mismatch` | Network or server problem; run again (finished sequences are kept, an interrupted file continues). |
 | `Not enough disk space for N VOT sequence(s)` | Free disk space, or test on fewer sequences. |

@@ -8,6 +8,7 @@ edilmeden çalıştırılır ve COCO tarzı detection metrikleriyle değerlendir
 - [Yöntem](#yöntem)
 - [Çalıştırma](#çalıştırma)
 - [Sık kullanılan ayarlar](#sık-kullanılan-ayarlar)
+- [Ağırlıklar](#ağırlıklar)
 - [VOT-LT2020 dizileri](#vot-lt2020-dizileri)
 - [Parametreler](#parametreler)
 - [Çıktılar](#çıktılar)
@@ -50,12 +51,12 @@ kare + hedef kutusu
 ## Çalıştırma
 
 ```bash
-python -m stark_ft download-checkpoints --model-config baseline_R101   # resmi STARK-ST101 (ayrıca: baseline = ST50)
-python -m stark_ft smoke --frames 50                                   # vot-toolkit'siz hızlı kontrol (ballet'i indirir)
+python -m stark_ft weights                                             # resmi ağırlıklar ve burada eğitilen koşular
+python -m stark_ft smoke --frames 50                                   # isteğe bağlı hızlı kontrol (ballet'i indirir)
 
-python -m stark_ft test --set ft_mode=none                             # sade STARK-ST
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # sade STARK-ST, resmi ağırlıklar
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
-python -m stark_ft test --set checkpoint=train:<koşu adı>              # stark_ft train ile eğitilmiş bir model
+python -m stark_ft test --set 'sequences=[bull]' --set weights=<koşu adı>   # stark_ft train ile eğitilmiş bir model
 python -m stark_ft analyze outputs/<deney> --score-thr 0.5             # tracking olmadan metrikleri yeniden hesaplar
 python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png
 ```
@@ -63,7 +64,7 @@ python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comp
 Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop
 GPU'da ≈ 2 saat sürer.
 
-- `show` (notebook: `nb.describe`) çıktı klasörünü, checkpoint'i ve hangi dizilerin indirileceğini gösterir.
+- `show` (notebook: `nb.describe`) çıktı klasörünü, ağırlıkları ve hangi dizilerin indirileceğini gösterir.
 - Aynı `name` aynı parametrelerle tekrar çalıştırılırsa **devam eder**: tamamlanan diziler atlanır (`vot evaluate` bu
   yüzden `-f` olmadan çalışır; her deneyin kendi VOT workspace'i vardır). `vot analysis` kullanılmaz; metrikler her
   zaman ham sonuçlardan hesaplanır.
@@ -82,7 +83,23 @@ GPU'da ≈ 2 saat sürer.
 | Fine-tune'un gücü | `ft_lr`, `ft_epochs_init` (1. karedeki adım), `ft_epochs_online` (update başına adım) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
 | ST101 yerine STARK-ST50 | `model_config="baseline"` |
-| Bu repoyla eğitilmiş bir model | `checkpoint="train:<aşama-2 koşu adı>"` (aynı `model_config`) |
+| Bu repoyla eğitilmiş bir model | `weights="<aşama-2 koşu adı>"` (aynı `model_config`) |
+
+## Ağırlıklar
+
+`weights` bir testin ağ ağırlıklarını seçer; deney adı ve `experiment.json` bunu kaydeder.
+
+| `weights` | Ağırlıklar |
+|---|---|
+| `"official"` (varsayılan) | `model_config` için STARK'ın yayımladığı ağırlıklar (LaSOT + GOT-10k + COCO + TrackingNet ile eğitildi; `*_got10k_only`: GOT-10k). İlk kullanıldığında `<checkpoints>` klasörüne otomatik indirilir. |
+| `"<koşu adı>"` | Burada eğitilmiş, tamamlanmış bir **aşama-2** koşusu, örn. `"st101_coco_stage2_s42"` ([train.tr.md](train.tr.md#bizim-koşularımız-ve-resmi-ağırlıklar)). Aynı `model_config` ile kullanılmalıdır; aşama-1 ve tamamlanmamış koşular reddedilir. |
+| dosya adı / yol | Başka herhangi bir checkpoint: dosya adı `<checkpoints>/stark_st2/<model_config>/` içinde aranır, `/` içeren değer yoldur. |
+
+`python -m stark_ft weights` (notebook: `nb.list_weights()`) bunları kökenlerine göre listeler: resmi ağırlıklar,
+burada ImageNet'ten eğitilen koşular ve burada resmi ağırlıkların üzerine eğitilen koşular. `show` / `nb.describe` bir
+testin hangi ağırlıkları kullanacağını gösterir. Deney adları, eğitilmiş ağırlıklarda koşu adıyla
+(`st101_coco_stage2_s42_online_...`), resmi ağırlıklarda modelle (`st101_online_...`) başlar; böylece farklı
+ağırlıkların sonuçları asla karışmaz.
 
 ## VOT-LT2020 dizileri
 
@@ -107,7 +124,7 @@ ve/veya `--set anahtar=değer`.
 | `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100_s0`. |
 | `model` | `"stark_st"` | `"stark_st"` veya `"stark_s"` (skor yok; 1.0 raporlar; `ft_mode="none"` gerekir). |
 | `model_config` | `"baseline_R101"` | `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) veya `model_configs/stark_s/` altındaki YAML. |
-| `checkpoint` | `None` | `None`: resmi dosya. Bir dosya adı `<checkpoints>/stark_st2/<model_config>/` içinde aranır; `/` içeren değer yoldur; `"train:<koşu adı>"` bir eğitim koşusunun `final.pth.tar`'ıdır. |
+| `weights` | `"official"` | `"official"`, burada eğitilmiş bir aşama-2 koşusu ya da bir checkpoint dosyası / yolu (bkz. [Ağırlıklar](#ağırlıklar)). (Eski adı: `checkpoint`.) |
 | `sequences` | `"all"` | `"all"` (50 dizi) veya bir liste, örn. `["bull", "ballet"]`; eksik olanlar indirilir. |
 | `update_interval` | `100` | Her N karede bir template update denemesi; `99999` = hiç. (YAML'lardaki `TEST.UPDATE_INTERVALS` kullanılmaz.) |
 | `update_conf_thr` | `0.5` | Yalnızca skor bundan büyükse update (STARK: 0.5). |
@@ -136,7 +153,7 @@ ve/veya `--set anahtar=değer`.
 
 | Dosya | İçerik |
 |---|---|
-| `experiment.json` | Parametreler, checkpoint, dataset, diziler, git commit, kod hash'i, tarih |
+| `experiment.json` | Parametreler (`weights` dahil), checkpoint dosyası, dataset, diziler, git commit, kod hash'i, tarih |
 | `run.log`, `run_status.json` | vot-toolkit çıktısı; tamamlanan / eksik diziler (tracker hataları: `vot_workspace/logs/`) |
 | `predictions/<dizi>/<dizi>_001.txt` | Kare başına kutu `x,y,w,h` (ilk satır `1`: init karesi, VOT formatı) |
 | `predictions/<dizi>/<dizi>_001_confidence.value`, `_time.value` | Kare başına skor ve süre |
@@ -234,8 +251,8 @@ aynı GPU tipinde çalıştırın ve GPU'yu raporlayın.**
 
 | Belirti | Çözüm |
 |---|---|
-| `Checkpoint not found` | `download-checkpoints` ya da dosyayı mesajdaki konuma koyun. |
-| Checkpoint için Google Drive "quota exceeded" | Mesajdaki linkten tarayıcıyla indirip mesajdaki konuma koyun. |
+| `No training run '...'` / `is a stage-1 run` / `was trained with model_config=...` | `python -m stark_ft weights` listesinden tamamlanmış bir aşama-2 koşusunu, onun `model_config`'iyle seçin. |
+| Resmi ağırlıklar için Google Drive "quota exceeded" | Mesajdaki linkten tarayıcıyla indirip mesajdaki konuma koyun. |
 | `Unknown sequence(s): [...]` | `sequences` içinde yazım hatası; mesaj 50 VOT-LT2020 adını listeler. |
 | VOT dizisi indirilemiyor / `Checksum mismatch` | Ağ veya sunucu sorunu; tekrar çalıştırın (tamamlanan diziler kalır, yarıda kalan dosya devam eder). |
 | `Not enough disk space for N VOT sequence(s)` | Disk alanı açın ya da daha az dizide test edin. |

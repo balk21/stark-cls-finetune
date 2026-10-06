@@ -18,7 +18,7 @@ Everything that should survive the session is kept in the Drive folder given by 
 | Drive folder | Content |
 |---|---|
 | `cache/` | the environment (7.8 GB) and every VOT sequence a test has used (`votlt2019_sequences/<sequence>.tar`; all 50: 17.6 GB), restored to the local disk when needed |
-| `checkpoints/` | downloaded / your own checkpoints (`checkpoints/stark_st2/<model_config>/`), copied to the local disk |
+| `checkpoints/` | the official STARK weights (downloaded here when first used) and your own checkpoint files |
 | `train_archives/{coco,got10k}/` | training dataset archives, extracted to the local disk in every session |
 | `outputs/` | test experiments (interrupted ones resume) |
 | `training/` | training runs (interrupted ones resume) |

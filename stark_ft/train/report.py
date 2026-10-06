@@ -1,13 +1,13 @@
 """
 Progress of training runs: status, last losses and the history plot (history.png).
 """
-import json
 from pathlib import Path
 
 import numpy as np
 
 from stark_ft.paths import Paths, get_paths
 from stark_ft.train.config import TrainConfig
+from stark_ft.weights import read_run
 
 
 def find_run(name_or_path, paths: Paths = None) -> Path:
@@ -31,10 +31,11 @@ def _history(run_dir: Path):
 
 
 def run_status(run_dir: Path) -> dict:
-    meta = json.loads((run_dir / "train_config.json").read_text())
+    meta = read_run(run_dir)
     tc = TrainConfig.from_dict(meta["config"])
     status = {"run_name": meta.get("run_name", run_dir.name), "run_dir": str(run_dir), "stage": tc.stage,
               "model_config": tc.model_config, "datasets": tc.datasets, "init": meta.get("init"),
+              "init_run": tc.init, "origin": meta["origin"], "family": tc.family,
               "gpu": meta.get("gpu"), "total_epochs": tc.total_epochs, "epochs_done": 0,
               "finished": (run_dir / "final.pth.tar").is_file(), "last": {}}
     h = _history(run_dir)
@@ -67,7 +68,8 @@ def list_runs(paths: Paths = None):
     root = (paths or get_paths()).train_outputs
     if not root.is_dir():
         return []
-    return [run_status(p) for p in sorted(root.iterdir()) if (p / "train_config.json").is_file()]
+    runs = [run_status(p) for p in root.iterdir() if (p / "train_config.json").is_file()]
+    return sorted(runs, key=lambda st: (st["family"], st["stage"], st["run_name"]))
 
 
 def plot_training_history(history, out_path, run_name: str):

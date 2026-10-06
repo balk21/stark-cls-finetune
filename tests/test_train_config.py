@@ -26,13 +26,24 @@ def _expect_error(**kwargs):
 def test_defaults_and_run_name():
     tc = TrainConfig().validate()
     assert (tc.stage, tc.model_config, tc.effective_batch, tc.micro_batch, tc.seed) == (1, "baseline_R101", 128, 16, 42)
-    assert tc.total_epochs == 500 and TrainConfig(stage=2, init="official").total_epochs == 50
-    assert tc.run_name == "st101_stage1_got10k_s42"
-    assert TrainConfig(model_config="baseline", stage=1, datasets=["coco"], epochs=3).run_name == "st50_stage1_coco_e3_s42"
-    assert (TrainConfig(stage=2, datasets=["coco"], init="st101_stage1_coco_s42").run_name
-            == "st101_stage2_coco_from-st101_stage1_coco_s42_s42")
-    # the official weights (trained on all four datasets) are always visible in the run name
-    assert TrainConfig(stage=2, datasets=["coco"], init="official").run_name == "st101_stage2_coco_from-official_s42"
+    assert tc.total_epochs == 500 and TrainConfig(stage=2).total_epochs == 50
+    # runs are grouped by family (model + datasets): stage 1 and its stage 2
+    assert tc.run_name == "st101_got10k_stage1_s42"
+    assert TrainConfig(model_config="baseline", datasets=["coco"], epochs=3).run_name == "st50_coco_stage1_e3_s42"
+    s2 = TrainConfig(stage=2, datasets=["coco"])
+    assert s2.init == "st101_coco_stage1_s42" and s2.run_name == "st101_coco_stage2_s42"  # default: own stage 1
+    assert TrainConfig(stage=2, datasets=["coco"], init="st101_coco_stage1_s42").run_name == s2.run_name
+    quick = TrainConfig(stage=2, datasets=["coco"], epochs=1)  # the same parameters as stage 1 with epochs=1
+    assert quick.init == TrainConfig(datasets=["coco"], epochs=1).run_name == "st101_coco_stage1_e1_s42"
+    assert quick.run_name == "st101_coco_stage2_e1_s42"
+    assert TrainConfig(stage=2, datasets=["coco"], init="st101_got10k+coco_stage1_s42").run_name == \
+        "st101_coco_stage2_from-st101_got10k+coco_stage1_s42_s42"
+    # runs on STARK's weights (trained on all four datasets) are marked
+    assert TrainConfig(stage=2, datasets=["coco"], init="official").run_name == "st101_coco_stage2_on-official_s42"
+    assert TrainConfig(stage=2, datasets=["got10k_full"], init="official",
+                       model_config="baseline_R101_got10k_only").run_name == \
+        "st101_got10k_full_stage2_on-official-got10k_s42"
+    assert TrainConfig(datasets=["coco", "got10k"], dataset_ratios=[2, 1]).run_name == "st101_got10k+coco_r1-2_stage1_s42"
     assert TrainConfig(name="my_run").run_name == "my_run"
 
 
@@ -57,8 +68,6 @@ def test_invalid_configs():
     _expect_error(val_datasets=["coco"])
     _expect_error(effective_batch=100, micro_batch=16)
     _expect_error(stage=1, init="official")
-    _expect_error(stage=2)  # stage 2 never falls back to the official weights silently
-    _expect_error(stage=2, init="")
     _expect_error(name="a/b")
 
 
@@ -93,23 +102,47 @@ def test_model_cfg_overrides():
     assert cfg2.DATA.VAL.DATASETS_NAME == ["GOT10K_votval"]
 
 
+def _run(paths, name, stage, origin=None, finished=True, **kw):
+    run_dir = paths.train_outputs / name
+    run_dir.mkdir(parents=True)
+    meta = {"config": TrainConfig(stage=stage, **kw).to_dict(), "run_name": name}
+    if origin:
+        meta["origin"] = origin
+    (run_dir / "train_config.json").write_text(json.dumps(meta))
+    if finished:
+        (run_dir / "final.pth.tar").write_bytes(b"x")
+    return run_dir
+
+
 def test_init_and_dataset_checks():
     with tempfile.TemporaryDirectory() as tmp:
         paths = _paths(tmp)
         info = describe(TrainConfig(stage=2, init="official", datasets=["got10k", "coco"]), paths)
-        assert len(info["dataset_problems"]) == 2 and "Official checkpoint not found" in info["init_error"]
+        assert len(info["dataset_problems"]) == 2 and info["init_error"] is None  # official: downloaded at the start
+        assert "downloaded when the run starts" in info["init"] and info["origin"] == "official"
         assert info["steps_per_epoch"] == 468 and info["accumulation"] == 8
         # official stage-2 checkpoint: everything except the classification head is loaded
         official = paths.checkpoints / "stark_st2" / "baseline_R101" / "STARKST_ep0050.pth.tar"
         official.parent.mkdir(parents=True)
         official.write_bytes(b"x")
-        assert resolve_init(TrainConfig(stage=2, init="official"), paths) == (official, ("cls_head.",))
-        # a finished stage-1 run
-        run = paths.train_outputs / "s1run" / "final.pth.tar"
-        run.parent.mkdir(parents=True)
-        run.write_bytes(b"x")
-        assert resolve_init(TrainConfig(stage=2, init="s1run"), paths) == (run, ())
-        assert resolve_init(TrainConfig(stage=1), paths) == (None, None)
+        assert resolve_init(TrainConfig(stage=2, init="official"), paths) == (official, ("cls_head.",), "official")
+        assert resolve_init(TrainConfig(stage=1), paths) == (None, None, "imagenet")
+        # stage 2 by default starts from our own stage-1 run of the same family; missing -> clear error
+        info = describe(TrainConfig(stage=2, datasets=["coco"]), paths)
+        assert "st101_coco_stage1_s42" in info["init_error"] and "Train it first" in info["init_error"]
+        run = _run(paths, "st101_coco_stage1_s42", 1, datasets=["coco"])
+        assert resolve_init(TrainConfig(stage=2, datasets=["coco"]), paths) == (run / "final.pth.tar", (), "imagenet")
+        # the origin is inherited along the chain; an unfinished or stage-2 run cannot be the init
+        _run(paths, "s1_on_official", 1, origin="official", datasets=["coco"])
+        assert resolve_init(TrainConfig(stage=2, init="s1_on_official"), paths)[2] == "official"
+        _run(paths, "s1_running", 1, finished=False)
+        _run(paths, "s2_done", 2, datasets=["coco"])
+        for init, error in (("s1_running", FileNotFoundError), ("s2_done", ValueError)):
+            try:
+                resolve_init(TrainConfig(stage=2, init=init), paths)
+                raise AssertionError(f"init={init} accepted")
+            except error:
+                pass
         # dataset layouts
         (paths.train_data / "got10k" / "train").mkdir(parents=True)
         (paths.train_data / "got10k" / "train" / "list.txt").write_text("GOT-10k_Train_000001")

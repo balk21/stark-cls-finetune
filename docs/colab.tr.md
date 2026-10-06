@@ -18,7 +18,7 @@ Oturumdan sonra da kalması gereken her şey `colab_drive` ile verilen Drive kla
 | Drive klasörü | İçerik |
 |---|---|
 | `cache/` | ortam (7.8 GB) ve bir testin kullandığı her VOT dizisi (`votlt2019_sequences/<dizi>.tar`; 50'si: 17.6 GB); gerektiğinde yerel diske geri yüklenir |
-| `checkpoints/` | indirilen / kendi checkpoint'leriniz (`checkpoints/stark_st2/<model_config>/`), yerel diske kopyalanır |
+| `checkpoints/` | resmi STARK ağırlıkları (ilk kullanıldığında buraya indirilir) ve kendi checkpoint dosyalarınız |
 | `train_archives/{coco,got10k}/` | eğitim veri seti arşivleri; her oturumda yerel diske açılır |
 | `outputs/` | test deneyleri (yarıda kalanlar devam eder) |
 | `training/` | eğitim koşuları (yarıda kalanlar devam eder) |

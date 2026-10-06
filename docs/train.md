@@ -6,6 +6,7 @@ batch size, on any combination of GOT-10k, COCO, LaSOT and TrackingNet.
 **English** | [Türkçe](train.tr.md)
 
 - [What is trained](#what-is-trained)
+- [Our runs and the official weights](#our-runs-and-the-official-weights)
 - [Datasets](#datasets)
 - [Running](#running)
 - [Typical runs](#typical-runs)
@@ -27,11 +28,24 @@ epoch, AdamW with lr 1e-4 (backbone × 0.1) and weight decay 1e-4, gradient clip
 samples every 20 (stage 1) / 10 (stage 2) epochs, seed 42, deterministic cuDNN. Frame sampling, augmentations and
 losses are those of the original code.
 
-Stage 2 always needs `init`: the name of a finished stage-1 run (trained on the datasets you want), a checkpoint path,
-or `"official"`, the **official STARK-ST checkpoint without its classification head**. Its backbone, transformer and
-box head are the official stage-1 weights (stage 2 freezes them), so this is the same as starting from the official
-stage-1 model, which is not published separately; these weights were trained on all four datasets (with
-`model_config="*_got10k_only"`: on GOT-10k only). The run name says `from-<init>`.
+## Our runs and the official weights
+
+STARK publishes weights trained on all four datasets (LaSOT, GOT-10k, COCO, TrackingNet; the `*_got10k_only` ones on
+GOT-10k only). They are used here only as they are: for testing (`weights="official"`, [test.md](test.md#weights)).
+The runs of this repository are kept apart from that training:
+
+| Origin | How | Run name | Listed under |
+|---|---|---|---|
+| from ImageNet | stage 1 from the ImageNet backbone, stage 2 on our own stage 1 (default) | `st101_coco_stage1_s42`, `st101_coco_stage2_s42` | "trained here from ImageNet" |
+| on the official weights | stage 2 with `init="official"`: the official checkpoint without its classification head | `st101_coco_stage2_on-official_s42` | "trained here on top of the official STARK weights" |
+| on another file | stage 2 with `init="<checkpoint path>"` | `..._from-<file>_...` | "trained here on top of another checkpoint file" |
+
+Runs are grouped by **family** (model + datasets + sampling ratios): `st101_coco`, `st101_got10k+coco`, ... A
+family's stage 2 starts from its own stage-1 run (`init=None`, i.e. the run with the same parameters and `stage=1`),
+so its weights have seen only the family's datasets. The origin is stored in every run's `train_config.json` and is
+inherited along the chain; `python -m stark_ft weights` (notebook: `nb.list_weights()`) lists the official weights and
+our runs by origin. With `init="official"` the backbone, transformer and box head are STARK's stage-1 weights (stage 2
+freezes them), trained on all four datasets: such a run is not "trained on fewer datasets", hence the separate name.
 
 ## Datasets
 
@@ -77,12 +91,13 @@ python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL_O
 ## Running
 
 ```bash
-# STARK-ST101 stage 1 on GOT-10k + COCO, then stage 2 on top of it
-python -m stark_ft train --set stage=1 --set 'datasets=[got10k, coco]' --set name=st101_s1
-python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --set init=st101_s1 --set name=st101_s2
-# only the classification head, on STARK's weights; STARK-ST50: --set model_config=baseline
-python -m stark_ft train --set stage=2 --set 'datasets=[coco]' --set init=official --set 'val_datasets=[]'
+# STARK-ST101 on GOT-10k + COCO: stage 1 from ImageNet, then stage 2 on top of it (STARK-ST50: model_config=baseline)
+python -m stark_ft train --set 'datasets=[got10k, coco]'               # st101_got10k+coco_stage1_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2 # st101_got10k+coco_stage2_s42
+# only the classification head, on STARK's weights (marked on-official)
+python -m stark_ft train --set 'datasets=[coco]' --set stage=2 --set init=official --set 'val_datasets=[]'
 python -m stark_ft train --config configs/train_example.yaml
+python -m stark_ft weights                      # official weights and our runs, by origin
 python -m stark_ft train ... --dry-run          # only check the parameters and the data
 python -m stark_ft train-report <run name>      # progress, last losses, history.png
 python -m stark_ft train-list
@@ -95,15 +110,16 @@ Notebook: `notebooks/train.ipynb`. The progress output shows samples/s, the epoc
 | Goal | `stage` | `datasets` | `init` | `val_datasets` |
 |---|---|---|---|---|
 | COCO, stage 1 | `1` | `["coco"]` | `None` | `[]` |
-| COCO, stage 2 | `2` | `["coco"]` | `"st101_stage1_coco_s42"` | `[]` |
+| COCO, stage 2 | `2` | `["coco"]` | `None` (= `st101_coco_stage1_s42`) | `[]` |
 | GOT-10k, stage 1 | `1` | `["got10k"]` | `None` | `["got10k"]` |
-| GOT-10k, stage 2 | `2` | `["got10k"]` | `"st101_stage1_got10k_s42"` | `["got10k"]` |
+| GOT-10k, stage 2 | `2` | `["got10k"]` | `None` (= `st101_got10k_stage1_s42`) | `["got10k"]` |
 | GOT-10k + COCO, stage 1 | `1` | `["got10k", "coco"]` | `None` | `["got10k"]` |
-| GOT-10k + COCO, stage 2 | `2` | `["got10k", "coco"]` | `"st101_stage1_got10k+coco_s42"` | `["got10k"]` |
+| GOT-10k + COCO, stage 2 | `2` | `["got10k", "coco"]` | `None` (= `st101_got10k+coco_stage1_s42`) | `["got10k"]` |
 | Only the classification head, on STARK's weights | `2` | e.g. `["coco"]` | `"official"` | `[]` |
 | GOT-10k only, without stage 1 | `2` | `["got10k_full"]` | `"official"` with `model_config="baseline_R101_got10k_only"` | `["got10k"]` |
 
-`init` of stage 2 is the stage-1 run name (printed during training; the folder name in `<train_outputs>`).
+Stage 2 is the stage-1 cell with `stage=2`; another stage-1 run can be given by name (`init`, the folder name in
+`<train_outputs>`). The rows with `"official"` build on STARK's weights and are marked `on-official`.
 `val_datasets=["got10k"]` validates on GOT-10k videos that are not used for training; use `[]` without GOT-10k.
 STARK's GOT-10k-only weights used all 9 335 GOT-10k videos, including the 1 000 that overlap with VOT and are left
 out by `got10k`.
@@ -115,10 +131,10 @@ out by `got10k`.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Run folder `<train_outputs>/<name>/`. `None`: generated from model, stage, datasets, `from-<init>`, `e<epochs>`, `r<ratios>` and seed, e.g. `st101_stage1_got10k+coco_s42`. |
+| `name` | `None` | Run folder `<train_outputs>/<name>/`. `None`: `<family>_stage<N>[_e<epochs>][_on-official / _from-<init>]_s<seed>`, e.g. `st101_got10k+coco_stage1_s42`. |
 | `model_config` | `"baseline_R101"` | `baseline_R101` (STARK-ST101) or `baseline` (STARK-ST50). The `*_got10k_only` configs only differ in the data (use them with `datasets=["got10k_full"]`); in stage 2 they select the official GOT-10k-only checkpoint as `init`. |
 | `stage` | `1` | `1` or `2`. |
-| `init` | `None` | Stage 1: `None` (ImageNet backbone). Stage 2 (**required**): a stage-1 run name, a checkpoint path or `"official"`. |
+| `init` | `None` | Stage 1: `None` (ImageNet backbone). Stage 2: `None` = our stage-1 run with the same parameters, another stage-1 run name, `"official"` (STARK's weights; marked `on-official`) or a checkpoint path. |
 | `datasets` | `["got10k"]` | Any non-empty combination of `got10k` (or `got10k_full`), `coco`, `lasot`, `trackingnet`. The order does not matter. |
 | `dataset_ratios` | `None` | Sampling weight per dataset (same order as `datasets`); each sample first picks a dataset with these weights, then a video. `None`: equal. |
 | `val_datasets` | `["got10k"]` | `["got10k"]` or `[]`. |
@@ -137,7 +153,7 @@ out by `got10k`.
 
 | File in `<train_outputs>/<run name>/` | Content |
 |---|---|
-| `train_config.json` | Parameters, dataset folders, initial weights, GPU, TF32 setting, code hash, date |
+| `train_config.json` | Parameters, origin, dataset folders, initial weights, GPU, TF32 setting, code hash, date |
 | `history.csv`, `history.png` | One row per epoch: duration, learning rate, training / validation losses; plot (dashed: LR drops) |
 | `logs/train.log` | Progress output |
 | `checkpoints/latest.pth.tar` | Complete state after the last finished epoch (network, optimizer, scheduler, random generators), written atomically every epoch. ST101: 0.56 GB (stage 1), 0.19 GB (stage 2) |
@@ -147,9 +163,9 @@ out by `got10k`.
 - Running the same parameters again **resumes** from `latest.pth.tar`; the result is bit-identical to an
   uninterrupted run (verified by killing a run during training). The same `name` with different parameters, or with a
   different version of the training code (`lib/train`, `lib/models`, `lib/config`, `lib/utils`,
-  `model_configs/stark_st1|2`, `stark_ft/train`), stops with an error; use another `name` or `--overwrite`.
-- A finished stage-2 run is tested with `checkpoint="train:<run name>"` (same `model_config`), see [test.md](test.md).
-  Stage-1 runs have an untrained classification head; use them as `init` of stage 2.
+  `model_configs/stark_st1|2`, `stark_ft/train/run.py`), stops with an error; use another `name` or `--overwrite`.
+- A finished stage-2 run is tested with `weights="<run name>"` (same `model_config`), see [test.md](test.md#weights).
+  Stage-1 runs have an untrained classification head and cannot be tested; they are the starting point of stage 2.
 - Nothing is written to the `checkpoints` folder.
 
 ## One GPU instead of eight
@@ -192,6 +208,7 @@ as on each of the 8 GPUs of the original).
 | `CUDA out of memory` | Lower `micro_batch` (e.g. 8) and keep `effective_batch=128`; the update stays the same. |
 | The machine crashes or runs out of RAM | Lower `num_workers` (COCO's annotation file is large and every data worker uses memory). |
 | `Not enough disk space for ...` | The extracted datasets do not fit (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Use a larger disk or fewer datasets. |
+| `Stage 2 starts from the stage-1 run of the same family ...` | Train stage 1 first (the same parameters with `stage=1`), or give another finished stage-1 run / `"official"` as `init`. |
 | `No GOT-10k archive in ...` | Put the GOT-10k archives into the folder named in the message (it is created), or give links / archive paths. |
 | `... 'Google Drive - Quota exceeded'` | The shared file reached its daily download limit; use your own copy of it ([colab.md](colab.md#got-10k-from-google-drive)). |
 | `... already exists with different parameters` / `different version of the training code` | Use another `name`, or `--overwrite` (notebook: `overwrite=True`) for a fresh run. |

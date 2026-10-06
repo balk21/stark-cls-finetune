@@ -3,6 +3,7 @@ Command-line interface (the notebooks call it as well, with the Python of the vo
 
 Shared
     python -m stark_ft check
+    python -m stark_ft weights                       # official STARK weights and the runs trained here, by origin
     python -m stark_ft download-checkpoints [--model stark_st] [--model-config baseline_R101 ...]
 Train
     python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL|PATH ...] [--archives DIR]
@@ -76,12 +77,33 @@ def cmd_train(args):
     return 0
 
 
-def _print_status(st):
+def _print_status(st, indent="", name=None):
     state = "finished" if st["finished"] else f"{st['epochs_done']}/{st['total_epochs']} epochs"
-    line = f"{st['run_name']}: stage {st['stage']}, {st['model_config']}, {'+'.join(st['datasets'])} - {state}"
+    line = f"{indent}{name or st['run_name']}: stage {st['stage']}, {st['model_config']}, {'+'.join(st['datasets'])}"
+    if st["stage"] == 2:
+        line += f", from {st['init_run']}"
+    line += f" - {state}"
     if not st["finished"] and st.get("remaining_hours") is not None:
         line += f" (~{st['remaining_hours']:.1f} h left at {st['epoch_seconds'] / 60:.1f} min/epoch)"
     print(line)
+
+
+def _print_runs(runs_by_origin, testable_only=False):
+    from stark_ft.weights import ORIGIN_TEXT
+    any_run = False
+    for origin, runs in runs_by_origin.items():
+        if not runs:
+            continue
+        any_run = True
+        print(f"Runs {ORIGIN_TEXT.get(origin, origin)}:")
+        for st in runs:
+            if testable_only and not (st["stage"] == 2 and st["finished"]):
+                note = "stage 1: init of stage 2, not testable" if st["stage"] == 1 else "not finished"
+                print(f"    ({st['run_name']}: {note})")
+            else:
+                _print_status(st, indent="  ", name=f"weights={st['run_name']!r}" if testable_only else None)
+    if not any_run:
+        print("No training runs.")
 
 
 def cmd_train_report(args):
@@ -98,10 +120,12 @@ def cmd_train_report(args):
         print(f"  {col:24s} {v['value']:.5f}  (epoch {v['epoch']})")
     if st.get("plot"):
         print(f"Plot        : {st['plot']}")
+    from stark_ft.weights import ORIGIN_TEXT
+    print(f"Origin      : {ORIGIN_TEXT.get(st['origin'], st['origin'])}")
     if st["finished"]:
-        hint = (f"checkpoint='train:{st['run_name']}'" if st["stage"] == 2
-                else f"stage 2 with init='{st['run_name']}'")
-        print(f"Use with    : {hint}")
+        hint = (f"test with weights={st['run_name']!r}" if st["stage"] == 2
+                else f"stage 2 of this family: same parameters with stage=2 (init={st['run_name']!r})")
+        print(f"Use         : {hint}")
     return 0
 
 
@@ -117,13 +141,13 @@ def cmd_show(args):
     from stark_ft.test.runner import resolve_sequences
     cfg = _test_params(args)
     paths = get_paths()
-    ckpt = cfg.checkpoint_path(paths)
+    from stark_ft import weights
+    w = weights.describe(cfg.weights, cfg.model, cfg.model_config, paths)
     info = {
         "experiment_name": cfg.experiment_name,
         "output_dir": str(paths.outputs / cfg.experiment_name),
         "output_exists": (paths.outputs / cfg.experiment_name).exists(),
-        "checkpoint": str(ckpt),
-        "checkpoint_exists": ckpt.is_file(),
+        "weights": w,
         "config": cfg.to_dict(),
     }
     try:
@@ -137,7 +161,8 @@ def cmd_show(args):
     print(f"Experiment  : {info['experiment_name']}")
     exists_note = "  (EXISTS - resumed if the parameters are the same)" if info["output_exists"] else ""
     print(f"Output      : {info['output_dir']}{exists_note}")
-    print(f"Checkpoint  : {info['checkpoint']}  ({'found' if info['checkpoint_exists'] else 'NOT FOUND'})")
+    print(f"Weights     : {cfg.weights} - {w.get('origin', '')}")
+    print(f"              {w['path']}  ({'PROBLEM: ' + w['problem'] if w['problem'] else w.get('note', 'found')})")
     if "sequences" in info:
         seqs = info["sequences"]
         print(f"Sequences   : {len(seqs)} -> {', '.join(seqs[:8])}{' ...' if len(seqs) > 8 else ''}")
@@ -150,7 +175,7 @@ def cmd_show(args):
     print("Parameters:")
     for k, v in info["config"].items():
         print(f"  {k:22s} = {v!r}")
-    return 0 if info["checkpoint_exists"] and "sequences" in info else 1
+    return 0 if not w["problem"] and "sequences" in info else 1
 
 
 def cmd_compare(args):
@@ -199,6 +224,7 @@ def main(argv=None):
 
     # shared
     sub.add_parser("check", help="Check the environment and the paths")
+    sub.add_parser("weights", help="Official STARK weights and the runs trained here (for the test parameter weights)")
     p = sub.add_parser("download-checkpoints", help="Download official STARK checkpoints")
     p.add_argument("--model", default="stark_st", choices=["stark_st", "stark_s"])
     p.add_argument("--model-config", nargs="+", default=["baseline_R101"])
@@ -253,6 +279,16 @@ def main(argv=None):
     if args.cmd == "check":
         from stark_ft.setup_utils import check_environment
         return 1 if check_environment()["problems"] else 0
+    if args.cmd == "weights":
+        from stark_ft.weights import list_weights
+        w = list_weights()
+        print("Official STARK weights (github.com/researchmm/Stark), weights='official' with the model_config:")
+        for o in w["official"]:
+            state = "downloaded" if o["downloaded"] else "downloaded automatically when first used"
+            print(f"  {o['model']:9s} model_config={o['model_config']!r:29s} trained on {o['trained_on']:38s} {state}")
+        print()
+        _print_runs(w["runs"], testable_only=True)
+        return 0
     if args.cmd == "download-checkpoints":
         from stark_ft.setup_utils import download_checkpoints
         download_checkpoints([(args.model, c) for c in args.model_config], force=args.force)
@@ -268,12 +304,8 @@ def main(argv=None):
     if args.cmd == "train-report":
         return cmd_train_report(args)
     if args.cmd == "train-list":
-        from stark_ft.train.report import list_runs
-        runs = list_runs()
-        for st in runs:
-            _print_status(st)
-        if not runs:
-            print("No training runs.")
+        from stark_ft.weights import list_weights
+        _print_runs(list_weights()["runs"])
         return 0
     # test
     if args.cmd == "download-dataset":

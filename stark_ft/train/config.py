@@ -36,7 +36,8 @@ class TrainConfig:
     datasets: List[str] = field(default_factory=lambda: ["got10k"])  # got10k(_full), coco, lasot, trackingnet
     dataset_ratios: Optional[List[float]] = None   # sampling weights; None = equal (as in STARK)
     val_datasets: List[str] = field(default_factory=lambda: ["got10k"])  # [] = no validation
-    init: Optional[str] = None               # stage 2 (required): stage-1 run name | checkpoint path | "official"
+    init: Optional[str] = None               # stage 2: None = our stage-1 run with the same model, datasets and seed
+                                             #   | another stage-1 run name | "official" (STARK's weights) | path
     epochs: Optional[int] = None             # None = model YAML (stage 1: 500, stage 2: 50)
     lr_drop_epoch: Optional[int] = None      # None = model YAML (stage 1: 400, stage 2: 40)
     samples_per_epoch: Optional[int] = None  # None = model YAML (60000)
@@ -56,6 +57,8 @@ class TrainConfig:
             self.datasets = [ds[i] for i in order]
             if isinstance(self.dataset_ratios, (list, tuple)) and len(self.dataset_ratios) == len(ds):
                 self.dataset_ratios = [self.dataset_ratios[i] for i in order]
+        if self.stage == 2 and not self.init and isinstance(self.datasets, list):
+            self.init = self.own_stage1  # our own stage 1 of the same family, never the official weights silently
 
     # ------------------------------------------------------------------
     @property
@@ -88,10 +91,6 @@ class TrainConfig:
             errors.append("effective_batch must be a multiple of micro_batch")
         if self.stage == 1 and self.init not in (None, "imagenet"):
             errors.append("stage 1 starts from ImageNet weights; init must be None or 'imagenet'")
-        if self.stage == 2 and not self.init:
-            errors.append("stage 2 needs init: the name of a finished stage-1 run (trained on the datasets you want), "
-                          "a checkpoint path, or 'official' (STARK's own weights, trained on LaSOT + GOT-10k + COCO + "
-                          "TrackingNet; with model_config='*_got10k_only': trained on GOT-10k only)")
         if self.name is not None and (not self.name or any(c in self.name for c in '/\\:*?"<>| ')):
             errors.append(f"name={self.name!r} cannot be used as a folder name")
         if errors:
@@ -110,19 +109,34 @@ class TrainConfig:
         return self.epochs if self.epochs is not None else int(self.yaml_value("TRAIN", "EPOCH"))
 
     @property
+    def family(self) -> str:
+        """Model + datasets (+ sampling ratios): the runs of one family belong together, e.g. st101_coco."""
+        model = "st101" if "R101" in self.model_config else "st50"
+        family = f"{model}_{'+'.join(self.datasets)}"
+        if self.dataset_ratios is not None:
+            family += "_r" + "-".join(f"{r:g}" for r in self.dataset_ratios)
+        return family
+
+    @property
+    def own_stage1(self) -> str:
+        """Default name of the stage-1 run of this family, i.e. of the same parameters with stage=1 (the default init
+        of stage 2)."""
+        return f"{self.family}_stage1" + (f"_e{self.epochs}" if self.epochs is not None else "") + f"_s{self.seed}"
+
+    @property
     def run_name(self) -> str:
+        """e.g. st101_coco_stage1_s42, st101_coco_stage2_s42 (on our own stage 1), st101_coco_stage2_on-official_s42
+        (on STARK's weights), st101_coco_stage2_from-<run>_s42 (on another stage-1 run)."""
         if self.name:
             return self.name
-        model = "st101" if "R101" in self.model_config else "st50"
-        if "got10k_only" in self.model_config:
-            model += "got"
-        parts = [model, f"stage{self.stage}", "+".join(self.datasets)]
-        if self.stage == 2 and self.init:  # e.g. from-st101_stage1_coco_s42 or from-official
-            parts.append("from-" + Path(self.init).name.split(".")[0])
+        parts = [self.family, f"stage{self.stage}"]
         if self.epochs is not None:
             parts.append(f"e{self.epochs}")
-        if self.dataset_ratios is not None:
-            parts.append("r" + "-".join(f"{r:g}" for r in self.dataset_ratios))
+        if self.stage == 2 and self.init != self.own_stage1:
+            if self.init == "official":
+                parts.append("on-official" + ("-got10k" if "got10k_only" in self.model_config else ""))
+            else:
+                parts.append("from-" + Path(self.init).name.split(".")[0])
         parts.append(f"s{self.seed}")
         return "_".join(parts)
 

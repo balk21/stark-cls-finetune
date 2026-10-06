@@ -15,9 +15,11 @@ Run folder (<train_outputs>/<run name>/):
     logs/train.log       progress output
     tensorboard/         TensorBoard logs
     final.pth.tar        final weights (written when training finishes)
-A trained stage-2 model is tested with  checkpoint="train:<run name>", and a stage-1 run initialises stage 2 with
-init="<stage-1 run name>". Stage 2 always needs an explicit `init`; init="official" (STARK's weights, trained on all
-four datasets) has to be asked for by name. Nothing is written to the `checkpoints` folder.
+Our runs are kept apart from STARK's published training: stage 1 starts from ImageNet, stage 2 by default from our
+own stage-1 run of the same family (model + datasets + seed), so the result is trained only on the run's datasets
+(origin "imagenet"). Stage 2 on STARK's weights must be asked for (init="official"); such runs are named
+"..._on-official_..." and listed separately (origin "official"). A finished stage-2 run is tested with
+weights="<run name>" (stark_ft/weights.py). Nothing is written to the `checkpoints` folder.
 """
 import datetime
 import importlib
@@ -33,10 +35,13 @@ import torch
 
 from stark_ft.common import code_hash
 from stark_ft.paths import REPO_ROOT, Paths, get_paths
+from stark_ft.setup_utils import download_checkpoints
 from stark_ft.train.config import ROOT_KEY, TRAIN_DATASETS, VAL_DATASETS, TrainConfig
+from stark_ft.weights import read_run
 
+# Code that determines the training result (the parameters themselves are compared via train_config.json)
 TRAINING_CODE = ("lib/train", "lib/models", "lib/config", "lib/utils", "model_configs/stark_st1",
-                 "model_configs/stark_st2", "stark_ft/train")  # code that determines the training result
+                 "model_configs/stark_st2", "stark_ft/train/run.py")
 OFFICIAL_STAGE2 = "STARKST_ep0050.pth.tar"
 
 
@@ -62,31 +67,42 @@ def check_dataset(name: str, root: Path) -> Optional[str]:
     return f"{name}: missing {missing}" if missing else None
 
 
-def resolve_init(tc: TrainConfig, paths: Paths):
-    """Returns (checkpoint path, keys to skip) for the initial weights of a stage-2 run; (None, None) for stage 1."""
+def resolve_init(tc: TrainConfig, paths: Paths, download: bool = False):
+    """(checkpoint path, keys to skip, origin) of the initial weights; (None, None, "imagenet") for stage 1.
+    origin: "imagenet" (our own chain), "official" (STARK's weights) or "external" (another checkpoint file).
+    download=True downloads the official weights if they are missing."""
     if tc.stage == 1:
-        return None, None
+        return None, None, "imagenet"
     init = tc.init
-    if not init:
-        raise ValueError("stage 2 needs init: a stage-1 run name, a checkpoint path or 'official'")
     if init == "official":
         # The official STARK-ST checkpoint is the result of stage 2, whose backbone, transformer and box head are
         # the (frozen) stage-1 weights. Loading it without the classification head is identical to starting stage
         # 2 from the official stage-1 weights.
         path = paths.checkpoints / "stark_st2" / tc.model_config / OFFICIAL_STAGE2
-        if not path.is_file():
-            raise FileNotFoundError(f"Official checkpoint not found: {path}\n"
-                                    "Download it first: `python -m stark_ft download-checkpoints` "
-                                    "(notebook: nb.download_checkpoints()).")
-        return path, ("cls_head.",)
-    candidates = [paths.train_outputs / init / "final.pth.tar",
-                  Path(init) if Path(init).is_absolute() else REPO_ROOT / init,
-                  paths.checkpoints / "stark_st1" / tc.model_config / init]
-    for c in candidates:
+        if not path.is_file() and download:
+            download_checkpoints([("stark_st", tc.model_config)])
+        return path, ("cls_head.",), "official"
+    run_dir = paths.train_outputs / init
+    if (run_dir / "train_config.json").is_file():
+        meta = read_run(run_dir)
+        if meta["config"].get("stage") != 1:
+            raise ValueError(f"init={init!r} is not a stage-1 run; stage 2 starts from a stage-1 run")
+        if not (run_dir / "final.pth.tar").is_file():
+            raise FileNotFoundError(f"The stage-1 run {init!r} has not finished yet (no final.pth.tar).")
+        return run_dir / "final.pth.tar", (), meta["origin"]
+    for c in (Path(init) if Path(init).is_absolute() else REPO_ROOT / init,
+              paths.checkpoints / "stark_st1" / tc.model_config / init):
         if c.is_file():
-            return c, ()
-    raise FileNotFoundError(f"Stage-1 weights {init!r} not found. Looked at:\n  " +
-                            "\n  ".join(str(c) for c in candidates))
+            return c, (), "external"
+    finished = sorted(p.parent.name for p in paths.train_outputs.glob("*/final.pth.tar")
+                      if read_run(p.parent)["config"].get("stage") == 1) if paths.train_outputs.is_dir() else []
+    default = init == tc.own_stage1
+    raise FileNotFoundError(
+        f"Stage 2 starts from {'the stage-1 run of the same family' if default else 'the stage-1 run'} {init!r}, "
+        f"which is not in {paths.train_outputs}.\n"
+        + ("Train it first (the same parameters with stage=1), " if default else "")
+        + "or set init to a finished stage-1 run, a checkpoint path or 'official' (STARK's weights; the run is then "
+        f"marked on-official).\nFinished stage-1 runs: {finished or 'none'}")
 
 
 def _load_model_cfg(tc: TrainConfig):
@@ -130,11 +146,15 @@ def describe(tc: TrainConfig, paths: Paths = None) -> dict:
     roots = dataset_roots(paths)
     used = sorted({ROOT_KEY[d] for d in tc.datasets} | {ROOT_KEY[d] for d in tc.val_datasets})
     problems = [p for p in (check_dataset(d, roots[d]) for d in used) if p]
-    init_path, init_error = None, None
+    init_path, init_error, origin = None, None, None
     try:
-        init_path = resolve_init(tc, paths)[0]
-    except FileNotFoundError as e:
+        init_path, _, origin = resolve_init(tc, paths)
+    except (FileNotFoundError, ValueError) as e:
         init_error = str(e)
+    if tc.init == "official" and init_path and not init_path.is_file():
+        init_text = f"{init_path} (official STARK weights; downloaded when the run starts)"
+    else:
+        init_text = str(init_path) if init_path else ("ImageNet" if tc.stage == 1 else None)
     samples = tc.samples_per_epoch or int(tc.yaml_value("DATA", "TRAIN", "SAMPLE_PER_EPOCH"))
     return {
         "run_name": tc.run_name,
@@ -146,8 +166,9 @@ def describe(tc: TrainConfig, paths: Paths = None) -> dict:
         "accumulation": tc.effective_batch // tc.micro_batch,
         "dataset_roots": {d: str(roots[d]) for d in used},
         "dataset_problems": problems,
-        "init": str(init_path) if init_path else ("ImageNet" if tc.stage == 1 else None),
+        "init": init_text if not init_error else None,
         "init_error": init_error,
+        "origin": origin,
         "config": tc.to_dict(),
     }
 
@@ -189,7 +210,7 @@ def run_training(tc: TrainConfig, paths: Paths = None, overwrite: bool = False) 
     (run_dir / "logs").mkdir(parents=True, exist_ok=True)
     meta = {"config": tc.to_dict(), "run_name": tc.run_name, "code_hash": code_hash,
             "created": datetime.datetime.now().isoformat(timespec="seconds"),
-            "dataset_roots": info["dataset_roots"], "init": info["init"],
+            "dataset_roots": info["dataset_roots"], "init": info["init"], "origin": info["origin"],
             "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
             "tf32_conv": torch.backends.cudnn.allow_tf32}
     if not meta_path.is_file():
@@ -236,7 +257,7 @@ def run_training(tc: TrainConfig, paths: Paths = None, overwrite: bool = False) 
                              settings=settings)
     optimizer, lr_scheduler = get_optimizer_scheduler(net, cfg)
 
-    init_path, skip = resolve_init(tc, paths)
+    init_path, skip, _ = resolve_init(tc, paths, download=True)
 
     def init_fn(model):
         if init_path is None:
@@ -258,11 +279,10 @@ def run_training(tc: TrainConfig, paths: Paths = None, overwrite: bool = False) 
     export = Path(info["export"])
     export.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"net": trainer.net.state_dict(), "net_type": type(trainer.net).__name__, "epoch": trainer.epoch,
-                "train_config": tc.to_dict(), "code_hash": code_hash}, export)
+                "train_config": tc.to_dict(), "origin": info["origin"], "code_hash": code_hash}, export)
     print(f"\nFinal weights exported to {export}")
     if tc.stage == 2:
-        print(f"Evaluate with: ExperimentConfig(model_config={tc.model_config!r}, "
-              f"checkpoint='train:{tc.run_name}')")
+        print(f"Test it with: weights={tc.run_name!r} (and model_config={tc.model_config!r})")
     else:
-        print(f"Use as stage-2 initialisation with: TrainConfig(stage=2, init={tc.run_name!r}, ...)")
+        print(f"Stage 2 of this family: the same parameters with stage=2 (init={tc.run_name!r})")
     return run_dir

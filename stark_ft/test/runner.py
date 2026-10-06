@@ -21,6 +21,7 @@ from pathlib import Path
 
 import yaml
 
+from stark_ft import weights
 from stark_ft.common import code_hash
 from stark_ft.test import vot_data
 from stark_ft.test.config import ExperimentConfig
@@ -161,12 +162,8 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
     parameters was started before, it is resumed (vot-toolkit skips completed sequences)."""
     cfg.validate()
     paths = paths or get_paths()
-    checkpoint = cfg.checkpoint_path(paths)
-    if not checkpoint.is_file():
-        raise FileNotFoundError(
-            f"Checkpoint not found: {checkpoint}\n"
-            "Download it with `python -m stark_ft download-checkpoints` (notebook: nb.download_checkpoints()), put the "
-            "file at this location, or pass a path via `checkpoint`.")
+    # official weights are downloaded if missing; a training run must be a finished stage-2 run of the same model
+    checkpoint = weights.resolve(cfg.weights, cfg.model, cfg.model_config, paths)
     sequences = resolve_sequences(cfg, paths, fetch=False)
 
     out_dir = paths.outputs / cfg.experiment_name
@@ -230,7 +227,7 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
     print(f"Experiment  : {cfg.experiment_name}")
     print(f"Output      : {out_dir}")
     print(f"Sequences   : {len(sequences)}")
-    print(f"Checkpoint  : {cfg.checkpoint_path(paths)}")
+    print(f"Weights     : {cfg.weights}  ({cfg.checkpoint_path(paths)})")
     print("-" * 70, flush=True)
 
     env = os.environ.copy()

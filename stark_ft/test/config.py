@@ -10,8 +10,9 @@ from typing import List, Optional, Union
 
 import yaml
 
+from stark_ft import weights as weights_mod
 from stark_ft.common import coerce
-from stark_ft.paths import MODEL_CONFIG_DIR, REPO_ROOT, Paths
+from stark_ft.paths import MODEL_CONFIG_DIR, Paths
 
 # model name -> (checkpoint / model_config folder, checkpoint file prefix)
 MODELS = {
@@ -38,7 +39,7 @@ class ExperimentConfig:
     # ---- Model ----
     model: str = "stark_st"               # "stark_st" (STARK-ST, with confidence) | "stark_s" (STARK-S, no confidence)
     model_config: str = "baseline_R101"   # model_configs/<stark_st2|stark_s>/<name>.yaml
-    checkpoint: Optional[str] = None      # None: <PREFIX>_ep<EPOCH>.pth.tar; a file name, a path or "train:<run name>"
+    weights: str = "official"             # "official" (STARK's) | "<training run name>" | checkpoint file / path
 
     # ---- Data ----
     sequences: Union[str, List[str]] = "all"  # "all" or ["bull", "ballet", ...]
@@ -104,6 +105,8 @@ class ExperimentConfig:
             errors.append("eval_thr_resolution must be >= 3")
         if not (self.sequences == "all" or (isinstance(self.sequences, list) and self.sequences)):
             errors.append("sequences must be 'all' or a non-empty list")
+        if not isinstance(self.weights, str) or not self.weights:
+            errors.append("weights must be 'official', a training run name or a checkpoint file / path")
         if self.name is not None and (not self.name or any(c in self.name for c in '/\\:*?"<>| ')):
             errors.append(f"name={self.name!r} cannot be used as a folder name (no spaces or /\\:*?\"<>|)")
         if errors:
@@ -114,22 +117,9 @@ class ExperimentConfig:
     def model_yaml(self) -> Path:
         return MODEL_CONFIG_DIR / self.model_dir / f"{self.model_config}.yaml"
 
-    def default_checkpoint_name(self) -> str:
-        with open(self.model_yaml()) as f:
-            epoch = int(yaml.safe_load(f)["TEST"]["EPOCH"])
-        return f"{MODELS[self.model]['prefix']}_ep{epoch:04d}.pth.tar"
-
     def checkpoint_path(self, paths: Paths) -> Path:
-        ckpt = self.checkpoint or self.default_checkpoint_name()
-        if ckpt.startswith("train:"):
-            # Weights of a training run of this repository (stark_ft/train)
-            return paths.train_outputs / ckpt[len("train:"):] / "final.pth.tar"
-        if "/" in ckpt or "\\" in ckpt:
-            # A path was given: absolute as is, relative to the repository root otherwise
-            p = Path(ckpt).expanduser()
-            return p if p.is_absolute() else (REPO_ROOT / p).resolve()
-        # Only a file name was given: look it up in the standard checkpoint folder
-        return paths.checkpoints / self.model_dir / self.model_config / ckpt
+        """The checkpoint file of `weights` (stark_ft/weights.py; nothing is downloaded here)."""
+        return weights_mod.path_of(self.weights, self.model, self.model_config, paths)
 
     def short_model_name(self) -> str:
         if self.model == "stark_s":
@@ -138,8 +128,11 @@ class ExperimentConfig:
             base = "st101" if "R101" in self.model_config else "st50"
         if "got10k_only" in self.model_config:
             base += "got"
-        if self.checkpoint:
-            base += "-" + Path(self.checkpoint.replace("train:", "")).name.split(".")[0]
+        run = weights_mod.run_name(self.weights)
+        if run:  # a training run of this repository: its name already says model, datasets and stage
+            return run
+        if self.weights != weights_mod.OFFICIAL:
+            base += "-" + Path(self.weights).name.split(".")[0]
         return base
 
     def auto_name(self) -> str:
@@ -179,6 +172,10 @@ class ExperimentConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExperimentConfig":
+        data = dict(data)
+        if "checkpoint" in data:  # earlier name of `weights`: None = official, "train:<run>" = a training run
+            old = data.pop("checkpoint")
+            data.setdefault("weights", weights_mod.OFFICIAL if not old else str(old).replace("train:", "", 1))
         types = {f.name: f.type for f in fields(cls)}
         unknown = set(data) - set(types)
         if unknown:

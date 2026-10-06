@@ -181,11 +181,13 @@ def _params_file(params: dict, folder: Path, prefix: str) -> Path:
 
 # ------------------------------------------------------------------ data
 def download_checkpoints(model_configs=("baseline_R101",), model="stark_st"):
-    """Official STARK checkpoints (skipped if present). On Colab they are kept on Google Drive."""
-    if _COLAB:
-        _colab().download_checkpoints(Path(_COLAB["drive_root"]), Path(_COLAB["local_root"]), model, model_configs)
-    else:
-        cli("download-checkpoints", "--model", model, "--model-config", *model_configs)
+    """Official STARK weights in advance (optional: tests / trainings download them when needed)."""
+    cli("download-checkpoints", "--model", model, "--model-config", *model_configs)
+
+
+def list_weights():
+    """Official STARK weights and the runs trained here, grouped by origin (values for the test parameter weights)."""
+    cli("weights")
 
 
 def download_vot_dataset(sequences="all"):

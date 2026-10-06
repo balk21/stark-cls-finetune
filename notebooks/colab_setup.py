@@ -8,11 +8,11 @@ VOT sequences, training archives) are kept on Drive, so later sessions only copy
 Layout (<drive_root>: default MyDrive/LOKAP, set in the first cell of the notebooks):
   <drive_root>/cache/vot1_env_<hash>.tar        the conda environment (~7.8 GB)
   <drive_root>/cache/votlt2019_sequences/       one tar per VOT-LT2020 sequence used (dataset_cache; all 50: 17.6 GB)
-  <drive_root>/checkpoints/                     checkpoints (same layout as checkpoints/ in the repository)
+  <drive_root>/checkpoints/                     official STARK weights / own checkpoint files (as checkpoints/)
   <drive_root>/train_archives/{coco,got10k}/    training dataset archives
   <drive_root>/outputs/                         test outputs (persist, so experiments can resume)
   <drive_root>/training/                        training runs (persist, so training can resume)
-  <local_root>/...                              environment, checkpoints and data used in the session (local disk)
+  <local_root>/...                              environment and data used in the session (local disk)
 """
 import hashlib
 import os
@@ -146,29 +146,6 @@ def setup_environment(drive_root: Path, local_root: Path, rebuild=False) -> Path
     return python
 
 
-def sync_checkpoints(drive_root: Path, local_root: Path) -> Path:
-    """Copies the checkpoints on Drive to the local disk (only new / changed files)."""
-    drive_ckpt, local_ckpt = drive_root / "checkpoints", local_root / "checkpoints"
-    copied = 0
-    for src in drive_ckpt.rglob("*.pth.tar"):
-        dst = local_ckpt / src.relative_to(drive_ckpt)
-        if not dst.is_file() or dst.stat().st_size != src.stat().st_size:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            copied += 1
-    if copied:
-        _log(f"{copied} checkpoint(s) copied from Drive to {local_ckpt}")
-    return local_ckpt
-
-
-def download_checkpoints(drive_root: Path, local_root: Path, model: str, model_configs) -> Path:
-    """Downloads official checkpoints to Drive (once) and copies them to the local disk."""
-    # The notebook's own Python is used: it only needs PyYAML and gdown (both preinstalled on Colab)
-    _run([sys.executable, "-m", "stark_ft", "download-checkpoints", "--model", model, "--model-config",
-          *model_configs], env={"STARK_CLEAN_CHECKPOINTS": str(drive_root / "checkpoints")})
-    return sync_checkpoints(drive_root, local_root)
-
-
 def check_gpu(python: Path) -> bool:
     """Checks that PyTorch in the vot1 environment can use the GPU."""
     code = ("import torch; ok = torch.cuda.is_available(); "
@@ -192,7 +169,7 @@ def write_paths(**paths):
 
 
 def session(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=True, rebuild_env=False) -> dict:
-    """Prepares the Colab session: Google Drive, the vot1 environment, the checkpoints on Drive and the paths."""
+    """Prepares the Colab session: Google Drive, the vot1 environment and the paths."""
     t0 = time.time()
     if in_colab() and not shutil.which("nvidia-smi"):
         print("WARNING: no GPU in this session. Choose Runtime -> Change runtime type -> GPU (e.g. A100 or L4), "
@@ -205,7 +182,7 @@ def session(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=True, rebuild_en
     (drive_root / "outputs").mkdir(parents=True, exist_ok=True)
     python = setup_environment(drive_root, local_root, rebuild=rebuild_env)
     gpu_ok = check_gpu(python)
-    paths = {"checkpoints": sync_checkpoints(drive_root, local_root),
+    paths = {"checkpoints": drive_root / "checkpoints",                     # official weights: downloaded here once
              "dataset": local_root / "data" / "votlt2020" / "sequences",       # VOT sequences: local disk
              "dataset_cache": drive_root / "cache" / "votlt2019_sequences",    # copies of the sequences used: Drive
              "outputs": drive_root / "outputs",

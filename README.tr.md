@@ -30,7 +30,7 @@ Veriyi `./data`, resmi checkpoint'leri `./checkpoints` altına koyun (veya başk
 
 ```
 ${ROOT}
-├── checkpoints
+├── checkpoints                      # resmi STARK ağırlıkları (kullanıldığında indirilir)
 │   └── stark_st2/baseline_R101/STARKST_ep0050.pth.tar
 └── data
     ├── votlt2020/sequences          # test (gerektiğinde indirilir)
@@ -42,40 +42,44 @@ ${ROOT}
 ```
 
 ```bash
-python -m stark_ft download-checkpoints --model-config baseline_R101   # resmi STARK-ST101 (baseline: ST50)
 python -m stark_ft prepare-train-data --datasets got10k coco           # COCO indirilir; GOT-10k: docs/train.tr.md
-python -m stark_ft download-dataset                                    # isteğe bağlı: 50 VOT-LT2020 dizisinin tamamı (17.6 GB)
 ```
+
+Resmi STARK ağırlıkları ve VOT-LT2020 dizileri, bir test onları kullandığında otomatik indirilir
+(önceden indirmek için: `download-checkpoints`, `download-dataset`).
 
 ## Eğitim
 
 ```bash
-# STARK-ST101, aşama 1 (backbone + transformer + kutu başlığı)
-python -m stark_ft train --set stage=1 --set 'datasets=[got10k, coco]' --set name=st101_s1
-# aşama 2 (sınıflandırma başlığı), aşama 1'in üzerine
-python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --set init=st101_s1 --set name=st101_s2
-# ilerleme
-python -m stark_ft train-report st101_s1
+# GOT-10k + COCO ile STARK-ST101: ImageNet'ten aşama 1 (backbone, transformer, kutu başlığı) -> st101_got10k+coco_stage1_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]'
+# kendi aşama 1'imizin üzerine aşama 2 (sınıflandırma başlığı)                           -> st101_got10k+coco_stage2_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2
+# ilerleme / tüm ağırlıklar (resmi ve burada eğitilenler)
+python -m stark_ft train-report st101_got10k+coco_stage1_s42
+python -m stark_ft weights
 ```
 
-`got10k, coco, lasot, trackingnet` veri setlerinin herhangi bir alt kümesi kullanılabilir; `--set model_config=baseline`
-STARK-ST50'yi eğitir. Aşama 2 her zaman `init` ister: bir aşama-1 koşusu ya da `init=official` (STARK'ın dört veri
-setinin tamamıyla eğitilmiş ağırlıkları). Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Ayrıntılar:
-[docs/train.tr.md](docs/train.tr.md).
+Bizim koşularımız STARK'ın yayımladığı eğitimden ayrı tutulur: yalnızca verilen veri setleriyle eğitilir
+(`got10k, coco, lasot, trackingnet`'in herhangi bir alt kümesi) ve adlarıyla gruplanır (model + veri setleri + aşama).
+Aşama 2'yi STARK'ın kendi ağırlıkları üzerine eğitmek (`--set init=official`) mümkündür, ama bu koşular
+`..._on-official_...` olarak adlandırılır ve ayrı listelenir. `--set model_config=baseline` STARK-ST50'yi eğitir.
+Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Ayrıntılar: [docs/train.tr.md](docs/train.tr.md).
 
 ## Test
 
 ```bash
-# VOT-LT2020'de STARK-ST101: fine-tune olmadan / sınıflandırma başlığının online fine-tune'u ile
-python -m stark_ft test --set ft_mode=none
-python -m stark_ft test --set ft_mode=online --set ft_samples=pos
-# bu repoyla eğitilmiş bir model
-python -m stark_ft test --set checkpoint=train:st101_s2
+# bull'da STARK-ST101 (resmi ağırlıklar): fine-tune olmadan / sınıflandırma başlığının online fine-tune'u ile
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
+# aynısı, burada eğitilmiş ağırlıklarla
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2_s42
 # deneyleri karşılaştırma
-python -m stark_ft compare st101_base_int100 st101_online_pos_lr0.0001_i15_o1_int100_s0
+python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_s42_base_int100_bull
 ```
 
-Test, kullandığı VOT-LT2020 dizilerinden diskte olmayanları indirir (örn. `bull` 58 MB; 50 dizinin tamamı: 17.6 GB).
+`weights`: `official` (STARK'ın ağırlıkları, varsayılan), burada eğitilmiş bir aşama-2 koşusu (`python -m stark_ft weights`
+listeler) ya da bir checkpoint dosyası. Diziler otomatik indirilir (örn. `bull` 58 MB; `sequences=all`: 50 dizi, 17.6 GB).
 Notebook'lar: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
 Yöntem, parametreler, çıktılar ve metrikler: [docs/test.tr.md](docs/test.tr.md).
 

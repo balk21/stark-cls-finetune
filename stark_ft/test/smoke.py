@@ -3,6 +3,7 @@ Smoke test without vot-toolkit: loads the model and tracks the first frames of a
 """
 import time
 
+from stark_ft import weights
 from stark_ft.paths import get_paths, list_sequences
 from stark_ft.test import vot_data
 from stark_ft.test.config import ExperimentConfig
@@ -28,8 +29,9 @@ def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int
     gt = read_groundtruth(seq_dir / "groundtruth.txt")
 
     t0 = time.time()
-    tracker = build_tracker(cfg, cfg.checkpoint_path(paths))
-    print(f"Model loaded ({time.time() - t0:.1f} s): {cfg.checkpoint_path(paths)}")
+    checkpoint = weights.resolve(cfg.weights, cfg.model, cfg.model_config, paths)  # official: downloaded if missing
+    tracker = build_tracker(cfg, checkpoint)
+    print(f"Model loaded ({time.time() - t0:.1f} s): {cfg.weights} ({checkpoint})")
 
     def rgb(p):
         return cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)

@@ -30,7 +30,7 @@ Put the data in `./data` and the official checkpoints in `./checkpoints` (or set
 
 ```
 ${ROOT}
-├── checkpoints
+├── checkpoints                      # official STARK weights (downloaded when used)
 │   └── stark_st2/baseline_R101/STARKST_ep0050.pth.tar
 └── data
     ├── votlt2020/sequences          # test (downloaded on demand)
@@ -42,39 +42,44 @@ ${ROOT}
 ```
 
 ```bash
-python -m stark_ft download-checkpoints --model-config baseline_R101   # official STARK-ST101 (baseline: ST50)
 python -m stark_ft prepare-train-data --datasets got10k coco           # COCO is downloaded; GOT-10k: docs/train.md
-python -m stark_ft download-dataset                                    # optional: all 50 VOT-LT2020 sequences (17.6 GB)
 ```
+
+The official STARK weights and the VOT-LT2020 sequences are downloaded automatically when a test uses them
+(in advance: `download-checkpoints`, `download-dataset`).
 
 ## Train
 
 ```bash
-# STARK-ST101, stage 1 (backbone + transformer + box head)
-python -m stark_ft train --set stage=1 --set 'datasets=[got10k, coco]' --set name=st101_s1
-# stage 2 (classification head) on top of it
-python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --set init=st101_s1 --set name=st101_s2
-# progress
-python -m stark_ft train-report st101_s1
+# STARK-ST101 on GOT-10k + COCO: stage 1 (backbone, transformer, box head) from ImageNet -> st101_got10k+coco_stage1_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]'
+# stage 2 (classification head) on top of our stage 1                               -> st101_got10k+coco_stage2_s42
+python -m stark_ft train --set 'datasets=[got10k, coco]' --set stage=2
+# progress / all weights (official and trained here)
+python -m stark_ft train-report st101_got10k+coco_stage1_s42
+python -m stark_ft weights
 ```
 
-Any subset of `got10k, coco, lasot, trackingnet` can be used; `--set model_config=baseline` trains STARK-ST50.
-Stage 2 always needs `init`: a stage-1 run, or `init=official` (STARK's weights, trained on all four datasets).
-Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Details: [docs/train.md](docs/train.md).
+Our runs are kept apart from STARK's published training: they are trained only on the given datasets (any subset of
+`got10k, coco, lasot, trackingnet`) and grouped by name (model + datasets + stage). Stage 2 on STARK's own weights
+(`--set init=official`) is possible, but such runs are named `..._on-official_...` and listed separately.
+`--set model_config=baseline` trains STARK-ST50. Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb).
+Details: [docs/train.md](docs/train.md).
 
 ## Test
 
 ```bash
-# STARK-ST101 on VOT-LT2020: without fine-tuning / with online fine-tuning of the classification head
-python -m stark_ft test --set ft_mode=none
-python -m stark_ft test --set ft_mode=online --set ft_samples=pos
-# a model trained with this repository
-python -m stark_ft test --set checkpoint=train:st101_s2
+# STARK-ST101 (official weights) on bull: without fine-tuning / with online fine-tuning of the classification head
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
+# the same with weights trained here
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2_s42
 # compare experiments
-python -m stark_ft compare st101_base_int100 st101_online_pos_lr0.0001_i15_o1_int100_s0
+python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_s42_base_int100_bull
 ```
 
-A test downloads the VOT-LT2020 sequences it uses that are not on disk yet (e.g. `bull` 58 MB; all 50: 17.6 GB).
+`weights`: `official` (STARK's, default), a stage-2 run trained here (`python -m stark_ft weights` lists them) or a
+checkpoint file. The sequences are downloaded automatically (e.g. `bull` 58 MB; `sequences=all`: 50, 17.6 GB).
 Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
 Method, parameters, outputs and metrics: [docs/test.md](docs/test.md).
 

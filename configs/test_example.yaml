@@ -1,8 +1,9 @@
-# python -m stark_ft test --config configs/test_example.yaml [--set ft_samples=posneg --set 'sequences=[bull]']
+# python -m stark_ft test --config configs/test_example.yaml [--set ft_samples=posneg --set weights=<stage-2 run name>]
 # Parameters that are not listed take their default values (docs/test.md).
 model: stark_st
 model_config: baseline_R101
-sequences: all
+weights: official          # or a stage-2 run trained here (python -m stark_ft weights)
+sequences: [bull]         # downloaded automatically; all = the 50 VOT-LT2020 sequences
 update_interval: 100
 ft_mode: online
 ft_samples: pos

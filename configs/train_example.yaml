@@ -1,4 +1,4 @@
-# python -m stark_ft train --config configs/train_example.yaml [--set stage=2 --set init=<stage-1 run name>]
+# python -m stark_ft train --config configs/train_example.yaml [--set stage=2]   (stage 2 starts from this stage 1)
 # Parameters that are not listed take the original STARK values (docs/train.md).
 model_config: baseline_R101
 stage: 1
