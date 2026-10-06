@@ -1,6 +1,6 @@
 # STARK-ST eğitimi
 
-Orijinal STARK eğitimi (`lib/train/`, resmi depodan taşındı): tek GPU'da, orijinal effective batch boyutuyla,
+Orijinal STARK eğitimi (`lib/train/`, resmi repodan taşındı): tek GPU'da, orijinal effective batch boyutuyla,
 GOT-10k, COCO, LaSOT ve TrackingNet'in herhangi bir kombinasyonuyla.
 
 [English](train.md) | **Türkçe**

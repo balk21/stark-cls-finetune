@@ -82,7 +82,7 @@ GPU'da ≈ 2 saat sürer.
 | Fine-tune'un gücü | `ft_lr`, `ft_epochs_init` (1. karedeki adım), `ft_epochs_online` (update başına adım) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
 | ST101 yerine STARK-ST50 | `model_config="baseline"` |
-| Bu depoyla eğitilmiş bir model | `checkpoint="train:<aşama-2 koşu adı>"` (aynı `model_config`) |
+| Bu repoyla eğitilmiş bir model | `checkpoint="train:<aşama-2 koşu adı>"` (aynı `model_config`) |
 
 ## VOT-LT2020 dizileri
 

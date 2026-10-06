@@ -2,7 +2,7 @@
 
 [English](README.md) | **Türkçe**
 
-Bu depo [STARK](https://github.com/researchmm/Stark) (ICCV 2021) üzerine kuruludur ve şunları ekler:
+Bu repo [STARK](https://github.com/researchmm/Stark) (ICCV 2021) üzerine kuruludur ve şunları ekler:
 
 - STARK-ST sınıflandırma başlığının her videoda **test sırasında fine-tune edilmesi** (`init` / `online`; pozitif ya da
   pozitif + negatif örneklerle). **VOT-LT2020** üzerinde COCO tarzı detection metrikleri (mAP, AP50, AP75) ve VOT-LT
@@ -69,7 +69,7 @@ setinin tamamıyla eğitilmiş ağırlıkları). Notebook: [`notebooks/train.ipy
 # VOT-LT2020'de STARK-ST101: fine-tune olmadan / sınıflandırma başlığının online fine-tune'u ile
 python -m stark_ft test --set ft_mode=none
 python -m stark_ft test --set ft_mode=online --set ft_samples=pos
-# bu depoyla eğitilmiş bir model
+# bu repoyla eğitilmiş bir model
 python -m stark_ft test --set checkpoint=train:st101_s2
 # deneyleri karşılaştırma
 python -m stark_ft compare st101_base_int100 st101_online_pos_lr0.0001_i15_o1_int100_s0
@@ -107,7 +107,7 @@ STARK:
 
 ## Teşekkür
 
-Tracker ve eğitim kodu resmi [STARK](https://github.com/researchmm/Stark) deposundandır; o da
+Tracker ve eğitim kodu resmi [STARK](https://github.com/researchmm/Stark) reposundandır; o da
 [PyTracking](https://github.com/visionml/pytracking) ve [DETR](https://github.com/facebookresearch/detr) üzerine
 kuruludur. Değerlendirmede [vot-toolkit](https://github.com/votchallenge/toolkit) ve
 [pycocotools](https://github.com/cocodataset/cocoapi) kullanılır.

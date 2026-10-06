@@ -9,7 +9,7 @@
 | Karşılaştırma | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/compare.ipynb) |
 
 Bir GPU oturumu seçin (*Runtime → Change runtime type*; eğitim için A100 veya L4) ve hücreleri sırayla çalıştırın.
-İlk hücre depoyu klonlar ve `nb.init(colab_drive=...)` çağırır: Google Drive bağlanır ve diğer makinelerdekiyle aynı
+İlk hücre repoyu klonlar ve `nb.init(colab_drive=...)` çağırır: Google Drive bağlanır ve diğer makinelerdekiyle aynı
 `vot1` ortamı geri yüklenir (ilk sefer micromamba ile kurulur, ~5 dk, sonra Drive'da saklanır).
 
 Oturumdan sonra da kalması gereken her şey `colab_drive` ile verilen Drive klasöründe tutulur
