@@ -1,7 +1,7 @@
 """
 Experiment configuration: ALL parameters that define a test run live here.
 
-The meaning of every parameter is explained in docs/details.md (section 4, "Parameters").
+The meaning of every parameter is explained in docs/test.md.
 """
 import json
 from dataclasses import asdict, dataclass, fields
@@ -10,6 +10,7 @@ from typing import List, Optional, Union
 
 import yaml
 
+from stark_ft.common import coerce
 from stark_ft.paths import MODEL_CONFIG_DIR, REPO_ROOT, Paths
 
 # model name -> (checkpoint / model_config folder, checkpoint file prefix)
@@ -121,7 +122,7 @@ class ExperimentConfig:
     def checkpoint_path(self, paths: Paths) -> Path:
         ckpt = self.checkpoint or self.default_checkpoint_name()
         if ckpt.startswith("train:"):
-            # Weights of a training run of this repository (stark_ft/training.py)
+            # Weights of a training run of this repository (stark_ft/train)
             return paths.train_outputs / ckpt[len("train:"):] / "final.pth.tar"
         if "/" in ckpt or "\\" in ckpt:
             # A path was given: absolute as is, relative to the repository root otherwise
@@ -182,7 +183,7 @@ class ExperimentConfig:
         unknown = set(data) - set(types)
         if unknown:
             raise ValueError(f"Unknown parameter(s): {sorted(unknown)}")
-        return cls(**{k: _coerce(k, v, types[k]) for k, v in data.items()})
+        return cls(**{k: coerce(k, v, types[k]) for k, v in data.items()})
 
     @classmethod
     def from_file(cls, path) -> "ExperimentConfig":
@@ -193,26 +194,3 @@ class ExperimentConfig:
         if "config" in data and isinstance(data["config"], dict):
             data = data["config"]
         return cls.from_dict(data)
-
-
-def _coerce(name, value, type_):
-    """Converts strings to the declared type of a parameter. YAML (1.1) reads e.g. `1e-5` as a string,
-    which would otherwise silently reach the tracker as text."""
-    if not isinstance(value, str):
-        if type_ is float and isinstance(value, int) and not isinstance(value, bool):
-            return float(value)
-        return value
-    try:
-        if type_ is float:
-            return float(value)
-        if type_ is int:
-            return int(value)
-        if type_ is bool:
-            if value.strip().lower() in ("true", "yes", "1"):
-                return True
-            if value.strip().lower() in ("false", "no", "0"):
-                return False
-            raise ValueError
-    except ValueError:
-        raise ValueError(f"Parameter {name}={value!r} cannot be converted to {type_.__name__}") from None
-    return value

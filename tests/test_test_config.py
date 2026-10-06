@@ -3,7 +3,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from stark_ft.config import ExperimentConfig
+from stark_ft.test.config import ExperimentConfig
 
 
 def test_from_file_json_and_yaml():
@@ -39,7 +39,7 @@ def test_coercion_and_errors():
             raise AssertionError(f"no error for {bad}")
 
 
-if __name__ == "__main__":  # without pytest: python -m tests.test_config
+if __name__ == "__main__":  # without pytest: python -m tests.test_test_config
     for _name, _fn in sorted(globals().items()):
         if _name.startswith("test_") and callable(_fn):
             _fn()

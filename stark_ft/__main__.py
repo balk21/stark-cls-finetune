@@ -1,20 +1,22 @@
 """
-Command-line interface. The notebooks call this interface as well, using the vot1 Python.
+Command-line interface (the notebooks call it as well, with the Python of the vot1 environment).
 
+Shared
     python -m stark_ft check
-    python -m stark_ft show    [--config experiment.json] [--set key=value ...] [--json]
-    python -m stark_ft smoke   [--config ...] [--set ...] [--sequence ballet] [--frames 30]
-    python -m stark_ft run     [--config ...] [--set ...] [--overwrite] [--no-analyze]
-    python -m stark_ft analyze outputs/<experiment> [--score-thr 0.35] [--iou-thr 0.5] [--thr-resolution 100] [--no-plots]
+    python -m stark_ft download-checkpoints [--model stark_st] [--model-config baseline_R101 ...]
+Train
+    python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL|PATH ...] [--archives DIR]
+    python -m stark_ft train [--config configs/train_example.yaml] [--set key=value ...] [--dry-run] [--overwrite]
+    python -m stark_ft train-report <run name>
+    python -m stark_ft train-list
+Test
+    python -m stark_ft download-dataset [--sequences all | bull ballet ...]   (optional: tests download what they use)
+    python -m stark_ft smoke [--config ...] [--set ...] [--sequence ballet] [--frames 30]
+    python -m stark_ft show [--config configs/test_example.yaml] [--set key=value ...]
+    python -m stark_ft test [--config configs/test_example.yaml] [--set key=value ...] [--overwrite] [--no-analyze]
+    python -m stark_ft analyze outputs/<experiment> [--score-thr 0.35] [--iou-thr 0.5] [--thr-resolution 100]
     python -m stark_ft list
     python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
-    python -m stark_ft download-checkpoints [--model stark_st] [--model-config baseline_R101 ...]
-    python -m stark_ft download-dataset [--sequences all | bull ballet ...]
-    python -m stark_ft train   [--config train.yaml] [--set key=value ...] [--overwrite] [--dry-run]
-    python -m stark_ft train-report <run name or folder> [--no-plot] [--json]
-    python -m stark_ft train-list
-    python -m stark_ft prepare-train-data --datasets got10k coco [--archives DIR] [--got10k-url URL|PATH ...]
-                                          [--delete-archives]
 """
 import argparse
 import json
@@ -27,31 +29,93 @@ os.environ["MPLBACKEND"] = "Agg"
 
 import yaml  # noqa: E402
 
-from stark_ft.config import ExperimentConfig  # noqa: E402
-
 OUTPUT_DIR_MARKER = "OUTPUT_DIR="  # parsed by notebooks/nbhelper.py
 
 
-def _build_config(args) -> ExperimentConfig:
-    data = {}
-    if args.config:
-        data = ExperimentConfig.from_file(args.config).to_dict()
+def _params(cls, args):
+    """Parameters from --config (YAML / JSON) and --set key=value (values parsed as YAML: 1e-4, [a, b], true)."""
+    data = cls.from_file(args.config).to_dict() if args.config else {}
     for item in args.set or []:
         key, _, value = item.partition("=")
-        data[key.strip()] = yaml.safe_load(value)  # "1e-4" -> float, "[a, b]" -> list, "true" -> bool
-    return ExperimentConfig.from_dict(data).validate()
+        data[key.strip()] = yaml.safe_load(value)
+    return cls.from_dict(data).validate()
 
 
-def _add_config_args(p):
-    p.add_argument("--config", help="YAML/JSON experiment file")
-    p.add_argument("--set", action="append", metavar="KEY=VALUE", help="Override a parameter (repeatable)")
+def _add_config_args(p, kind):
+    p.add_argument("--config", help=f"YAML / JSON file with {kind} parameters")
+    p.add_argument("--set", action="append", metavar="KEY=VALUE", help="Set a parameter (repeatable)")
+
+
+# ====================================================================== train
+def cmd_train(args):
+    from stark_ft.train.config import TrainConfig
+    from stark_ft.train.run import describe, run_training
+    tc = _params(TrainConfig, args)
+    info = describe(tc)
+    if args.json:
+        print(json.dumps(info, ensure_ascii=False))
+        return 0
+    if args.dry_run:
+        exists = "  (EXISTS - resumed if the parameters are the same)" if info["run_exists"] else ""
+        print(f"Run         : {info['run_name']}{exists}")
+        print(f"Folder      : {info['run_dir']}")
+        print(f"Export      : {info['export']}")
+        print(f"Epochs      : {info['epochs']}, {info['steps_per_epoch']} optimizer steps/epoch, "
+              f"{info['accumulation']} micro-batches/step")
+        print(f"Init        : {info['init'] or info['init_error']}")
+        for d, root in info["dataset_roots"].items():
+            print(f"Dataset     : {d:12s} {root}")
+        for p in info["dataset_problems"]:
+            print(f"PROBLEM     : {p}")
+        print("Parameters:")
+        for k, v in info["config"].items():
+            print(f"  {k:22s} = {v!r}")
+        return 1 if info["dataset_problems"] or info["init_error"] else 0
+    out = run_training(tc, overwrite=args.overwrite)
+    print(f"\n{OUTPUT_DIR_MARKER}{out}")
+    return 0
+
+
+def _print_status(st):
+    state = "finished" if st["finished"] else f"{st['epochs_done']}/{st['total_epochs']} epochs"
+    line = f"{st['run_name']}: stage {st['stage']}, {st['model_config']}, {'+'.join(st['datasets'])} - {state}"
+    if not st["finished"] and st.get("remaining_hours") is not None:
+        line += f" (~{st['remaining_hours']:.1f} h left at {st['epoch_seconds'] / 60:.1f} min/epoch)"
+    print(line)
+
+
+def cmd_train_report(args):
+    from stark_ft.train.report import report
+    st = report(args.run, plot=not args.no_plot)
+    if args.json:
+        print(json.dumps(st, ensure_ascii=False))
+        return 0
+    _print_status(st)
+    print(f"Folder      : {st['run_dir']}")
+    print(f"GPU         : {st['gpu']}")
+    print(f"Init        : {st['init'] or 'ImageNet'}")
+    for col, v in st["last"].items():
+        print(f"  {col:24s} {v['value']:.5f}  (epoch {v['epoch']})")
+    if st.get("plot"):
+        print(f"Plot        : {st['plot']}")
+    if st["finished"]:
+        hint = (f"checkpoint='train:{st['run_name']}'" if st["stage"] == 2
+                else f"stage 2 with init='{st['run_name']}'")
+        print(f"Use with    : {hint}")
+    return 0
+
+
+# ====================================================================== test
+def _test_params(args):
+    from stark_ft.test.config import ExperimentConfig
+    return _params(ExperimentConfig, args)
 
 
 def cmd_show(args):
-    from stark_ft import vot_data
     from stark_ft.paths import get_paths
-    from stark_ft.runner import resolve_sequences
-    cfg = _build_config(args)
+    from stark_ft.test import vot_data
+    from stark_ft.test.runner import resolve_sequences
+    cfg = _test_params(args)
     paths = get_paths()
     ckpt = cfg.checkpoint_path(paths)
     info = {
@@ -89,78 +153,11 @@ def cmd_show(args):
     return 0 if info["checkpoint_exists"] and "sequences" in info else 1
 
 
-def _build_train_config(args):
-    from stark_ft.training import TrainConfig
-    data = {}
-    if args.config:
-        data = TrainConfig.from_file(args.config).to_dict()
-    for item in args.set or []:
-        key, _, value = item.partition("=")
-        data[key.strip()] = yaml.safe_load(value)
-    return TrainConfig.from_dict(data).validate()
-
-
-def cmd_train(args):
-    from stark_ft import training
-    tc = _build_train_config(args)
-    info = training.describe(tc)
-    if args.json:
-        print(json.dumps(info, ensure_ascii=False))
-        return 0
-    if args.dry_run:
-        print(f"Run         : {info['run_name']}{'  (EXISTS - resumed if the parameters are the same)' if info['run_exists'] else ''}")
-        print(f"Folder      : {info['run_dir']}")
-        print(f"Export      : {info['export']}")
-        print(f"Epochs      : {info['epochs']}, {info['steps_per_epoch']} optimizer steps/epoch, "
-              f"{info['accumulation']} micro-batches/step")
-        print(f"Init        : {info['init'] or info['init_error']}")
-        for d, root in info["dataset_roots"].items():
-            print(f"Dataset     : {d:12s} {root}")
-        for p in info["dataset_problems"]:
-            print(f"PROBLEM     : {p}")
-        print("Parameters:")
-        for k, v in info["config"].items():
-            print(f"  {k:22s} = {v!r}")
-        return 1 if info["dataset_problems"] or info["init_error"] else 0
-    out = training.run_training(tc, overwrite=args.overwrite)
-    print(f"\n{OUTPUT_DIR_MARKER}{out}")
-    return 0
-
-
-def _print_status(st):
-    state = "finished" if st["finished"] else f"{st['epochs_done']}/{st['total_epochs']} epochs"
-    line = f"{st['run_name']}: stage {st['stage']}, {st['model_config']}, {'+'.join(st['datasets'])} - {state}"
-    if not st["finished"] and st.get("remaining_hours") is not None:
-        line += f" (~{st['remaining_hours']:.1f} h left at {st['epoch_seconds'] / 60:.1f} min/epoch)"
-    print(line)
-
-
-def cmd_train_report(args):
-    from stark_ft import training
-    st = training.report(args.run, plot=not args.no_plot)
-    if args.json:
-        print(json.dumps(st, ensure_ascii=False))
-        return 0
-    _print_status(st)
-    print(f"Folder      : {st['run_dir']}")
-    print(f"GPU         : {st['gpu']}")
-    print(f"Init        : {st['init'] or 'ImageNet'}")
-    for col, v in st["last"].items():
-        print(f"  {col:24s} {v['value']:.5f}  (epoch {v['epoch']})")
-    if st.get("plot"):
-        print(f"Plot        : {st['plot']}")
-    if st["finished"]:
-        hint = (f"checkpoint='train:{st['run_name']}'" if st["stage"] == 2
-                else f"stage 2 with init='{st['run_name']}'")
-        print(f"Use with    : {hint}")
-    return 0
-
-
 def cmd_compare(args):
     import pandas as pd
 
-    from stark_ft import compare
-    from stark_ft.plots import plot_metric_comparison
+    from stark_ft.test import compare
+    from stark_ft.test.plots import plot_metric_comparison
     names = args.names
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 50)
@@ -194,107 +191,118 @@ def cmd_compare(args):
     return 0
 
 
+# ====================================================================== main
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="python -m stark_ft")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("check", help="Check the environment and paths")
-    p = sub.add_parser("show", help="Validate the parameters and show where the experiment will be written")
-    _add_config_args(p)
-    p.add_argument("--json", action="store_true")
-    p = sub.add_parser("smoke", help="Quick test without VOT (a few frames)")
-    _add_config_args(p)
-    p.add_argument("--sequence")
-    p.add_argument("--frames", type=int, default=30)
-    p = sub.add_parser("run", help="Run an experiment (+ analysis)")
-    _add_config_args(p)
-    p.add_argument("--overwrite", action="store_true")
-    p.add_argument("--no-analyze", action="store_true")
-    p = sub.add_parser("analyze", help="Produce metrics and plots from existing results")
-    p.add_argument("output_dir")
-    p.add_argument("--score-thr", type=float)
-    p.add_argument("--iou-thr", type=float)
-    p.add_argument("--thr-resolution", type=int, help="Number of candidates in the F-max threshold search (default 100)")
-    p.add_argument("--no-plots", action="store_true")
-    sub.add_parser("list", help="List analysed experiments")
-    p = sub.add_parser("compare", help="Compare experiments")
-    p.add_argument("names", nargs="+")
-    p.add_argument("--out", help="Excel output (.xlsx)")
-    p.add_argument("--plot", help="Bar chart (.png)")
+    parser = argparse.ArgumentParser(prog="python -m stark_ft", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="cmd", required=True, metavar="command")
+
+    # shared
+    sub.add_parser("check", help="Check the environment and the paths")
     p = sub.add_parser("download-checkpoints", help="Download official STARK checkpoints")
     p.add_argument("--model", default="stark_st", choices=["stark_st", "stark_s"])
     p.add_argument("--model-config", nargs="+", default=["baseline_R101"])
     p.add_argument("--force", action="store_true")
-    p = sub.add_parser("download-dataset", help="Download VOT-LT2020 sequences (experiments also download the "
-                                                "sequences they need)")
-    p.add_argument("--sequences", nargs="+", default=["all"], help="'all' (default, 17.6 GB) or sequence names")
-    p = sub.add_parser("train", help="Train STARK-ST (stage 1 or 2) on a combination of datasets")
-    _add_config_args(p)
-    p.add_argument("--overwrite", action="store_true")
+
+    # train
+    p = sub.add_parser("prepare-train-data", help="Train: download / extract training datasets (got10k, coco)")
+    p.add_argument("--datasets", nargs="+", required=True, choices=["got10k", "got10k_full", "coco"])
+    p.add_argument("--archives", help="Folder for the archives (default: <train_data>/_archives)")
+    p.add_argument("--got10k-url", action="append", default=[],
+                   help="GOT-10k archive: download link (Google Drive share links work) or path (repeatable)")
+    p.add_argument("--delete-archives", action="store_true", help="Delete the archives after extracting them")
+    p = sub.add_parser("train", help="Train: STARK-ST stage 1 or 2 on a combination of datasets")
+    _add_config_args(p, "training")
+    p.add_argument("--overwrite", action="store_true", help="Delete an existing run with the same name first")
     p.add_argument("--dry-run", action="store_true", help="Only validate and show what would be done")
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("train-report", help="Progress of a training run; writes history.png")
+    p = sub.add_parser("train-report", help="Train: progress of a run (writes history.png)")
     p.add_argument("run", help="Run name (in train_outputs) or run folder")
     p.add_argument("--no-plot", action="store_true")
     p.add_argument("--json", action="store_true")
-    sub.add_parser("train-list", help="List the training runs")
-    p = sub.add_parser("prepare-train-data", help="Download / extract the training datasets (got10k, coco)")
-    p.add_argument("--datasets", nargs="+", required=True, choices=["got10k", "got10k_full", "coco"])
-    p.add_argument("--archives", help="Folder for the downloaded archives (default: <train_data>/_archives)")
-    p.add_argument("--got10k-url", action="append", default=[], help="GOT-10k archive: download link (Google Drive share links work) or path (repeatable)")
-    p.add_argument("--delete-archives", action="store_true", help="Delete the archives after extracting them")
+    sub.add_parser("train-list", help="Train: list the training runs")
+
+    # test
+    p = sub.add_parser("download-dataset", help="Test: download VOT-LT2020 sequences in advance (optional)")
+    p.add_argument("--sequences", nargs="+", default=["all"], help="'all' (default, 17.6 GB) or sequence names")
+    p = sub.add_parser("smoke", help="Test: quick check without vot-toolkit (a few frames)")
+    _add_config_args(p, "test")
+    p.add_argument("--sequence")
+    p.add_argument("--frames", type=int, default=30)
+    p = sub.add_parser("show", help="Test: validate the parameters, show the output folder")
+    _add_config_args(p, "test")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("test", aliases=["run"], help="Test: run an experiment on VOT-LT2020 (+ analysis)")
+    _add_config_args(p, "test")
+    p.add_argument("--overwrite", action="store_true", help="Delete an existing experiment with the same name first")
+    p.add_argument("--no-analyze", action="store_true")
+    p = sub.add_parser("analyze", help="Test: metrics and plots from existing results")
+    p.add_argument("output_dir")
+    p.add_argument("--score-thr", type=float)
+    p.add_argument("--iou-thr", type=float)
+    p.add_argument("--thr-resolution", type=int, help="Number of candidates in the F-max threshold search (100)")
+    p.add_argument("--no-plots", action="store_true")
+    sub.add_parser("list", help="Test: list analysed experiments")
+    p = sub.add_parser("compare", help="Test: compare experiments")
+    p.add_argument("names", nargs="+")
+    p.add_argument("--out", help="Excel output (.xlsx)")
+    p.add_argument("--plot", help="Bar chart (.png)")
     args = parser.parse_args(argv)
 
+    # shared
     if args.cmd == "check":
         from stark_ft.setup_utils import check_environment
         return 1 if check_environment()["problems"] else 0
-    if args.cmd == "show":
-        return cmd_show(args)
-    if args.cmd == "smoke":
-        from stark_ft.setup_utils import smoke_test
-        smoke_test(_build_config(args), args.sequence, args.frames)
-        return 0
-    if args.cmd == "run":
-        from stark_ft.runner import run_experiment
-        out_dir = run_experiment(_build_config(args), overwrite=args.overwrite, analyze=not args.no_analyze)
-        print(f"\n{OUTPUT_DIR_MARKER}{out_dir}")
-        return 0
-    if args.cmd == "analyze":
-        from stark_ft.analysis import analyze_experiment
-        analyze_experiment(args.output_dir, score_thr=args.score_thr, iou_thr=args.iou_thr,
-                           thr_resolution=args.thr_resolution, plots=not args.no_plots)
-        return 0
-    if args.cmd == "list":
-        from stark_ft.compare import list_experiments
-        names = list_experiments()
-        print("\n".join(names) if names else "No analysed experiments.")
-        return 0
-    if args.cmd == "compare":
-        return cmd_compare(args)
     if args.cmd == "download-checkpoints":
         from stark_ft.setup_utils import download_checkpoints
         download_checkpoints([(args.model, c) for c in args.model_config], force=args.force)
+        return 0
+    # train
+    if args.cmd == "prepare-train-data":
+        from stark_ft.paths import get_paths
+        from stark_ft.train.data import prepare
+        prepare(args.datasets, get_paths().train_data, args.archives, args.got10k_url, args.delete_archives)
         return 0
     if args.cmd == "train":
         return cmd_train(args)
     if args.cmd == "train-report":
         return cmd_train_report(args)
     if args.cmd == "train-list":
-        from stark_ft.training import list_runs
+        from stark_ft.train.report import list_runs
         runs = list_runs()
         for st in runs:
             _print_status(st)
         if not runs:
             print("No training runs.")
         return 0
-    if args.cmd == "prepare-train-data":
-        from stark_ft.paths import get_paths
-        from stark_ft.train_data import prepare
-        prepare(args.datasets, get_paths().train_data, args.archives, args.got10k_url, args.delete_archives)
-        return 0
+    # test
     if args.cmd == "download-dataset":
-        from stark_ft.setup_utils import download_dataset
+        from stark_ft.test.data import download_dataset
         download_dataset(sequences="all" if args.sequences == ["all"] else args.sequences)
         return 0
+    if args.cmd == "smoke":
+        from stark_ft.test.smoke import smoke_test
+        smoke_test(_test_params(args), args.sequence, args.frames)
+        return 0
+    if args.cmd == "show":
+        return cmd_show(args)
+    if args.cmd in ("test", "run"):
+        from stark_ft.test.runner import run_experiment
+        out_dir = run_experiment(_test_params(args), overwrite=args.overwrite, analyze=not args.no_analyze)
+        print(f"\n{OUTPUT_DIR_MARKER}{out_dir}")
+        return 0
+    if args.cmd == "analyze":
+        from stark_ft.test.analysis import analyze_experiment
+        analyze_experiment(args.output_dir, score_thr=args.score_thr, iou_thr=args.iou_thr,
+                           thr_resolution=args.thr_resolution, plots=not args.no_plots)
+        return 0
+    if args.cmd == "list":
+        from stark_ft.test.compare import list_experiments
+        names = list_experiments()
+        print("\n".join(names) if names else "No analysed experiments.")
+        return 0
+    if args.cmd == "compare":
+        return cmd_compare(args)
 
 
 if __name__ == "__main__":

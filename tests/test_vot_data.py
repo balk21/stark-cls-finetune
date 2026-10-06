@@ -11,10 +11,10 @@ import threading
 import zipfile
 from pathlib import Path
 
-from stark_ft import vot_data
-from stark_ft.config import ExperimentConfig
 from stark_ft.paths import Paths
-from stark_ft.runner import ExperimentExistsError, prepare_experiment, resolve_sequences
+from stark_ft.test import vot_data
+from stark_ft.test.config import ExperimentConfig
+from stark_ft.test.runner import ExperimentExistsError, prepare_experiment, resolve_sequences
 
 NAMES = ["seqa", "seqb"]
 

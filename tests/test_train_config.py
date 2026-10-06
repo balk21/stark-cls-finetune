@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 
 from stark_ft.paths import Paths
-from stark_ft.training import TrainConfig, _load_model_cfg, describe, resolve_init
+from stark_ft.train.config import TrainConfig
+from stark_ft.train.run import _load_model_cfg, describe, resolve_init
 
 
 def _paths(tmp):
@@ -121,7 +122,7 @@ def test_init_and_dataset_checks():
         assert info["dataset_problems"] == [] and list(info["dataset_roots"]) == ["got10k"]
 
 
-if __name__ == "__main__":  # without pytest: python -m tests.test_training
+if __name__ == "__main__":  # without pytest: python -m tests.test_train_config
     for _name, _fn in sorted(globals().items()):
         if _name.startswith("test_") and callable(_fn):
             _fn()

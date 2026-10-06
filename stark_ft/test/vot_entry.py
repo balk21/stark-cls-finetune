@@ -2,7 +2,7 @@
 Entry point that vot-toolkit (TraX protocol) starts as a separate process for every sequence.
 
 It is not run directly; it is registered in the trackers.ini written by runner.py as
-    command = stark_ft.vot_entry
+    command = stark_ft.test.vot_entry
 The experiment parameters are read from the experiment.json file pointed to by the
 STARK_CLEAN_EXPERIMENT environment variable.
 
@@ -16,9 +16,9 @@ from pathlib import Path
 import cv2
 import torch
 
-from stark_ft.config import ExperimentConfig
-from stark_ft.tracker_factory import build_tracker
-from stark_ft.vot_trax import VOT, Rectangle
+from stark_ft.test.config import ExperimentConfig
+from stark_ft.test.tracker_factory import build_tracker
+from stark_ft.test.vot_trax import VOT, Rectangle
 
 EVENTS_HEADER = "frame,event,conf_score\n"
 

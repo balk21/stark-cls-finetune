@@ -12,7 +12,6 @@ Output folder layout (outputs/<experiment name>/):
     metrics/              metrics.xlsx, metrics.json, summary.txt, f_curve.csv, f_curve.png
 """
 import datetime
-import hashlib
 import json
 import os
 import shutil
@@ -22,15 +21,17 @@ from pathlib import Path
 
 import yaml
 
-from stark_ft import vot_data
-from stark_ft.config import ExperimentConfig
+from stark_ft.common import code_hash
+from stark_ft.test import vot_data
+from stark_ft.test.config import ExperimentConfig
 from stark_ft.paths import REPO_ROOT, Paths, get_paths
 
 TRACKER_ID = "stark_clean"
 VOT_RESULTS_SUBDIR = Path("results") / TRACKER_ID / "longterm"
 # Code that determines the tracker output. If it changes, an experiment must not be resumed: completed sequences
 # (skipped by vot-toolkit, which is why `vot evaluate` runs without -f) would come from the old code.
-TRACKING_CODE = ("lib", "model_configs", "stark_ft/vot_entry.py", "stark_ft/tracker_factory.py", "stark_ft/vot_trax.py")
+TRACKING_CODE = ("lib", "model_configs", "stark_ft/test/vot_entry.py", "stark_ft/test/tracker_factory.py",
+                 "stark_ft/test/vot_trax.py")
 TRACKING_EXCLUDE = ("lib/train", "lib/config/stark_st1", "model_configs/stark_st1")  # training only
 
 
@@ -47,19 +48,8 @@ def _git_commit():
 
 
 def tracking_code_hash() -> str:
-    """Hash of the code that determines the tracker output (independent of git and of documentation changes)."""
-    h = hashlib.sha1()
-    for entry in TRACKING_CODE:
-        root = REPO_ROOT / entry
-        files = sorted(root.rglob("*")) if root.is_dir() else [root]
-        for f in files:
-            rel = f.relative_to(REPO_ROOT).as_posix()
-            if any(rel == e or rel.startswith(e + "/") for e in TRACKING_EXCLUDE):
-                continue
-            if f.is_file() and f.suffix in (".py", ".yaml"):
-                h.update(str(f.relative_to(REPO_ROOT)).encode())
-                h.update(f.read_bytes().replace(b"\r\n", b"\n"))
-    return h.hexdigest()[:12]
+    """Hash of the code that determines the tracker output."""
+    return code_hash(TRACKING_CODE, TRACKING_EXCLUDE)
 
 
 def resolve_sequences(cfg: ExperimentConfig, paths: Paths, fetch: bool = True):
@@ -98,7 +88,7 @@ def _write_workspace(ws: Path, cfg: ExperimentConfig, paths: Paths, sequences, e
         f.write(f"[{TRACKER_ID}]\n")
         f.write(f"label = {cfg.experiment_name}\n")
         f.write("protocol = traxpython\n")
-        f.write("command = stark_ft.vot_entry\n")
+        f.write("command = stark_ft.test.vot_entry\n")
         f.write(f"paths = {REPO_ROOT}\n")
         f.write(f"python = {sys.executable}\n")
         f.write(f"timeout = {int(cfg.tracker_timeout)}\n")
@@ -175,7 +165,8 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
     if not checkpoint.is_file():
         raise FileNotFoundError(
             f"Checkpoint not found: {checkpoint}\n"
-            "Download it with 00_setup.ipynb, put the file at this location, or pass a path via `checkpoint`.")
+            "Download it with `python -m stark_ft download-checkpoints` (notebook: nb.download_checkpoints()), put the "
+            "file at this location, or pass a path via `checkpoint`.")
     sequences = resolve_sequences(cfg, paths, fetch=False)
 
     out_dir = paths.outputs / cfg.experiment_name
@@ -266,7 +257,7 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
         _print_tracker_errors(out_dir / "vot_workspace" / "logs", since=started)
 
     if analyze and status["complete"]:
-        from stark_ft.analysis import analyze_experiment
+        from stark_ft.test.analysis import analyze_experiment
         analyze_experiment(out_dir, paths=paths)
     return out_dir
 

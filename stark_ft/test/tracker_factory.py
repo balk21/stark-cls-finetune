@@ -5,7 +5,7 @@ import importlib
 from pathlib import Path
 from types import SimpleNamespace
 
-from stark_ft.config import ExperimentConfig
+from stark_ft.test.config import ExperimentConfig
 
 
 def load_model_cfg(cfg: ExperimentConfig):

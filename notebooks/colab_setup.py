@@ -1,32 +1,18 @@
 """
-Google Colab bootstrap — uses ONLY the standard library.
+Google Colab support (standard library only). Used by nbhelper.init() / the data helpers on Colab.
 
-Colab sessions are ephemeral, so every session has to restore the environment and the checkpoints.
-`bootstrap()` is idempotent: it only does what is missing in the current session.
+Colab gives a new machine in every session. session() mounts Google Drive and restores the vot1 environment from a
+Drive cache (creating it the first time), so that the notebooks work as on any other machine. Downloads (checkpoints,
+VOT sequences, training archives) are kept on Drive, so later sessions only copy / extract them.
 
-  First session (slow, once):
-    - installs micromamba and creates the `vot1` environment from environment/vot1_environment.yml
-      (exactly the same packages as on Vast.ai / a local conda machine), then caches it on Google Drive;
-    - downloads the official checkpoint(s) to Drive.
-  Later sessions (a few minutes):
-    - restores the environment from the Drive cache to the local disk.
-  VOT-LT2020 sequences are NOT downloaded here: every experiment downloads only the sequences it uses
-  (stark_ft/vot_data.py) and keeps a copy of each on Drive (<drive_root>/cache/votlt2019_sequences/<sequence>.tar),
-  so later sessions restore them from Drive. bootstrap(vot_sequences="all" or a list) fetches them up front instead.
-  Training datasets (03_train.ipynb) are prepared separately with `python -m stark_ft prepare-train-data`; their
-  archives are kept on Drive (<drive_root>/train_archives) and extracted to the local disk in every session.
-
-Layout:
-  <drive_root>/cache/vot1_env_<hash>.tar        cached conda environment (~7.5 GB)
-  <drive_root>/cache/votlt2019_sequences/       one tar per downloaded VOT sequence (all 50: 17.6 GB)
-  <drive_root>/checkpoints/...                  checkpoints (same layout as checkpoints/ in the repository)
-  <drive_root>/outputs/                         experiment outputs (persist across sessions, so runs can resume)
-  <drive_root>/train_archives/{coco,got10k}/    training dataset archives (COCO ~19.6 GB; GOT-10k: see README)
-  <drive_root>/training/                        training runs (persist across sessions, so training can resume)
-  <local_root>/micromamba/envs/vot1/            the environment (local disk)
-  <local_root>/data/votlt2020/sequences/        the VOT sequences (local disk; reading images from Drive is too slow)
-  <local_root>/checkpoints/                     local copy of the Drive checkpoints
-  <local_root>/train_data/                      extracted training datasets (local disk)
+Layout (<drive_root>: default MyDrive/LOKAP, set in the first cell of the notebooks):
+  <drive_root>/cache/vot1_env_<hash>.tar        the conda environment (~7.8 GB)
+  <drive_root>/cache/votlt2019_sequences/       one tar per VOT-LT2020 sequence used (dataset_cache; all 50: 17.6 GB)
+  <drive_root>/checkpoints/                     checkpoints (same layout as checkpoints/ in the repository)
+  <drive_root>/train_archives/{coco,got10k}/    training dataset archives
+  <drive_root>/outputs/                         test outputs (persist, so experiments can resume)
+  <drive_root>/training/                        training runs (persist, so training can resume)
+  <local_root>/...                              environment, checkpoints and data used in the session (local disk)
 """
 import hashlib
 import os
@@ -42,10 +28,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = REPO_ROOT / "environment" / "vot1_environment.yml"
-DRIVE_ROOT = "/content/drive/MyDrive/LOKAP"  # the notebooks pass their DRIVE_ROOT (first cell)
+DRIVE_ROOT = "/content/drive/MyDrive/LOKAP"
 LOCAL_ROOT = "/content"
 MICROMAMBA_URL = "https://micro.mamba.pm/api/micromamba/linux-64/latest"
-DEFAULT_CHECKPOINTS = (("stark_st", "baseline_R101"),)
 
 
 def in_colab() -> bool:
@@ -155,20 +140,15 @@ def setup_environment(drive_root: Path, local_root: Path, rebuild=False) -> Path
             old.unlink()  # caches of older environment files
         _tar_create(mamba_root / "envs", "vot1", cache)
     if not python.is_file():
-        raise RuntimeError(f"The environment is incomplete ({python} is missing). Run bootstrap(rebuild_env=True).")
+        raise RuntimeError(f"The environment is incomplete ({python} is missing). "
+                           "Run colab_setup.session(rebuild_env=True).")
     _log(f"Environment ready: {python}")
     return python
 
 
-def setup_checkpoints(drive_root: Path, local_root: Path, checkpoints):
-    """Downloads missing official checkpoints to Drive and copies every Drive checkpoint to the local disk."""
-    drive_ckpt = drive_root / "checkpoints"
-    local_ckpt = local_root / "checkpoints"
-    for model in sorted({m for m, _ in checkpoints}):
-        cfgs = [c for m, c in checkpoints if m == model]
-        # Runs with the notebook's own Python: it only needs PyYAML and gdown (both preinstalled on Colab)
-        _run([sys.executable, "-m", "stark_ft", "download-checkpoints", "--model", model, "--model-config", *cfgs],
-             env={"STARK_CLEAN_CHECKPOINTS": str(drive_ckpt)})
+def sync_checkpoints(drive_root: Path, local_root: Path) -> Path:
+    """Copies the checkpoints on Drive to the local disk (only new / changed files)."""
+    drive_ckpt, local_ckpt = drive_root / "checkpoints", local_root / "checkpoints"
     copied = 0
     for src in drive_ckpt.rglob("*.pth.tar"):
         dst = local_ckpt / src.relative_to(drive_ckpt)
@@ -176,21 +156,17 @@ def setup_checkpoints(drive_root: Path, local_root: Path, checkpoints):
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
             copied += 1
-    _log(f"Checkpoints ready: {local_ckpt} ({copied} copied from Drive)")
+    if copied:
+        _log(f"{copied} checkpoint(s) copied from Drive to {local_ckpt}")
     return local_ckpt
 
 
-def setup_dataset(drive_root: Path, local_root: Path):
-    """The VOT sequence folder (local disk) and its cache on Drive. Nothing is downloaded here."""
-    seq_dir = local_root / "data" / "votlt2020" / "sequences"
-    cache = drive_root / "cache" / "votlt2019_sequences"
-    seq_dir.mkdir(parents=True, exist_ok=True)
-    cached = len(list(cache.glob("*.tar"))) if cache.is_dir() else 0
-    _log(f"VOT sequences: fetched when an experiment needs them ({cached} of 50 cached on Drive in {cache})")
-    old = drive_root / "cache" / "votlt2020_sequences.tar"
-    if old.is_file():
-        _log(f"Note: {old} ({old.stat().st_size / 1e9:.1f} GB) is no longer used; you can delete it.")
-    return seq_dir, cache
+def download_checkpoints(drive_root: Path, local_root: Path, model: str, model_configs) -> Path:
+    """Downloads official checkpoints to Drive (once) and copies them to the local disk."""
+    # The notebook's own Python is used: it only needs PyYAML and gdown (both preinstalled on Colab)
+    _run([sys.executable, "-m", "stark_ft", "download-checkpoints", "--model", model, "--model-config",
+          *model_configs], env={"STARK_CLEAN_CHECKPOINTS": str(drive_root / "checkpoints")})
+    return sync_checkpoints(drive_root, local_root)
 
 
 def check_gpu(python: Path) -> bool:
@@ -215,16 +191,11 @@ def write_paths(**paths):
     return path
 
 
-def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoints=DEFAULT_CHECKPOINTS,
-              rebuild_env=False, vot_sequences=()) -> dict:
-    """Prepares the current Colab session. Safe to call in every notebook; only missing steps are executed.
-    vot_sequences: VOT sequences to fetch now ("all" or a list of names); by default none, since every experiment
-    fetches the sequences it uses."""
+def session(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=True, rebuild_env=False) -> dict:
+    """Prepares the Colab session: Google Drive, the vot1 environment, the checkpoints on Drive and the paths."""
     t0 = time.time()
-    if mount is None:
-        mount = in_colab()
     if in_colab() and not shutil.which("nvidia-smi"):
-        print("WARNING: no GPU in this session. Choose Runtime -> Change runtime type -> GPU (T4, L4 or A100), "
+        print("WARNING: no GPU in this session. Choose Runtime -> Change runtime type -> GPU (e.g. A100 or L4), "
               "then run this cell again.")
     if mount and not Path("/content/drive/MyDrive").is_dir():
         from google.colab import drive  # noqa: import only available on Colab
@@ -232,19 +203,16 @@ def bootstrap(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=None, checkpoi
     drive_root, local_root = Path(drive_root), Path(local_root)
     _log(f"Google Drive folder: {drive_root}")
     (drive_root / "outputs").mkdir(parents=True, exist_ok=True)
-
     python = setup_environment(drive_root, local_root, rebuild=rebuild_env)
     gpu_ok = check_gpu(python)
-    ckpt = setup_checkpoints(drive_root, local_root, checkpoints)
-    dataset, dataset_cache = setup_dataset(drive_root, local_root)
-    info = {"checkpoints": ckpt, "dataset": dataset, "dataset_cache": dataset_cache, "outputs": drive_root / "outputs",
-            "train_data": local_root / "train_data", "train_outputs": drive_root / "training"}
-    paths_file = write_paths(**info)
-    if vot_sequences:
-        names = ["all"] if vot_sequences == "all" else list(vot_sequences)
-        _run([python, "-m", "stark_ft", "download-dataset", "--sequences", *names])
+    paths = {"checkpoints": sync_checkpoints(drive_root, local_root),
+             "dataset": local_root / "data" / "votlt2020" / "sequences",       # VOT sequences: local disk
+             "dataset_cache": drive_root / "cache" / "votlt2019_sequences",    # copies of the sequences used: Drive
+             "outputs": drive_root / "outputs",
+             "train_data": local_root / "train_data",
+             "train_outputs": drive_root / "training"}
+    write_paths(**paths)
     os.environ["VOT1_PYTHON"] = str(python)  # used by nbhelper.python()
-    _log(f"Session ready in {time.time() - t0:.0f} s. Paths: {paths_file}")
-    info = {k: (str(v) if v is not None else None) for k, v in info.items()}
-    info.update(python=str(python), gpu=gpu_ok, train_archives=str(drive_root / "train_archives"))
-    return info
+    _log(f"Session ready in {time.time() - t0:.0f} s")
+    return {"drive_root": str(drive_root), "local_root": str(local_root), "python": str(python), "gpu": gpu_ok,
+            "train_archives": str(drive_root / "train_archives"), **{k: str(v) for k, v in paths.items()}}

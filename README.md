@@ -1,176 +1,86 @@
-# stark-cls-finetune
+# STARK-ST with test-time fine-tuning of the classification head
 
 **English** | [Türkçe](README.tr.md)
 
-Test-time fine-tuning of the confidence head of the [STARK-ST](https://github.com/researchmm/Stark) tracker
-(ICCV 2021), evaluated on **VOT-LT2020** with detection metrics (**mAP, AP50, AP75**).
+This repository builds on [STARK](https://github.com/researchmm/Stark) (ICCV 2021) and adds:
 
-**Why.** In every frame STARK-ST outputs a box and a confidence score. The score says whether the target is visible
-and decides when the template is updated, so in long-term tracking a wrong score is as harmful as a wrong box. The
-score comes from a small head (`cls_head`) that is trained once for all objects. This repo trains that head for a few
-steps **on the target of each video** while tracking (everything else stays frozen) and measures the effect.
+- **Test-time fine-tuning** of the STARK-ST classification head on every video (`init` / `online`, positive or
+  positive + negative samples), evaluated on **VOT-LT2020** with COCO-style detection metrics (mAP, AP50, AP75) and
+  the VOT-LT F-max threshold.
+- **Training STARK-ST on one GPU** (stage 1 and stage 2) with the original effective batch size, on any combination
+  of GOT-10k, COCO, LaSOT and TrackingNet.
 
-**What you can do with it**
+## Install
 
-| Notebook | Purpose |
-|---|---|
-| `00_setup_colab` / `00_setup` | Prepare the environment once (Colab / Vast.ai or your own machine) |
-| `01_run_experiment` | Track VOT-LT2020 sequences with or without fine-tuning and compute the metrics |
-| `02_compare` | Put experiments side by side |
-| `03_train` | Retrain STARK-ST itself on the datasets you choose (GOT-10k, COCO or both) |
-
-Everything runs from these notebooks; every notebook's first cell prepares what it needs.
-
-## 1. Setup
-
-**GPU:** NVIDIA with ≥ 8 GB, e.g. Colab **A100** / L4 or an RTX 3000 / 4000 card. Not RTX 5000 (not supported by the
-PyTorch version) and preferably not T4: it has no TF32, so its results differ slightly. **Compare only runs from the
-same GPU type** ([why](docs/details.md#results-across-gpus)).
-
-**Google Colab** (recommended)
-1. Open [`00_setup_colab.ipynb`](https://colab.research.google.com/github/balk21/stark-cls-finetune/blob/main/notebooks/00_setup_colab.ipynb)
-   and choose *Runtime → Change runtime type → A100*.
-2. Run all cells (first time 10–15 min). This creates the conda environment `vot1` (the same packages on every
-   machine, so results are reproducible), downloads the STARK-ST101 checkpoint and tracks 50 frames as a test
-   (mean IoU > 0.5 means the setup works).
-
-Colab deletes the machine after every session, so everything is kept in Google Drive under `MyDrive/LOKAP/`
-(environment, checkpoints, results, training runs). Later sessions restore it in ~3 min. To use another folder,
-change `DRIVE_ROOT` in the first cell of every notebook.
-
-**Vast.ai or your own computer** (Linux with conda and Jupyter)
 ```bash
 git clone https://github.com/balk21/stark-cls-finetune.git
+cd stark-cls-finetune
+conda env create -n vot1 -f environment/vot1_environment.yml
+conda activate vot1
 ```
-Open `notebooks/00_setup.ipynb` and run all cells (the environment takes 10–20 min once).
 
-## 2. Run an experiment: `01_run_experiment.ipynb`
+Python 3.8, PyTorch 2.4.1, CUDA 12.1, vot-toolkit 0.5.3; tested on NVIDIA RTX 3000 / 4000 series GPUs.
+Everything can also be run from the notebooks in `notebooks/` (they create the environment if it is missing), on a
+local machine, a server or [Google Colab](docs/colab.md).
 
-One experiment = STARK-ST tracks the chosen sequences with one set of parameters (through the official
-vot-toolkit), then the metrics and plots are computed.
+## Data preparation
 
-**Change only the `PARAMS` cell (step 1):**
+Put the data in `./data` and the official checkpoints in `./checkpoints` (or set other locations in
+`configs/paths.local.yaml`, see `configs/paths.local.example.yaml`):
 
-| You want | Set |
-|---|---|
-| Plain STARK-ST (baseline) | `ft_mode="none"` |
-| Fine-tuning on the first frame only | `ft_mode="init"` |
-| Fine-tuning on the first frame and at every template update | `ft_mode="online"` |
-| Training samples: positive only / positive + negative | `ft_samples="pos"` / `"posneg"` |
-| How strong the fine-tuning is | `ft_lr`, `ft_epochs_init` (steps on frame 1), `ft_epochs_online` (steps per update) |
-| Sequences | `sequences=["bull", "ballet"]` or `"all"` (all 50) |
-| STARK-ST50 instead of ST101 | `model_config="baseline"` |
-| A model you trained ([§4](#4-train-stark-st-03_trainipynb)) | `checkpoint="train:<stage-2 run name>"` |
+```
+${ROOT}
+├── checkpoints
+│   └── stark_st2/baseline_R101/STARKST_ep0050.pth.tar
+└── data
+    ├── votlt2020/sequences          # test (downloaded on demand)
+    └── train                        # training
+        ├── got10k/train
+        ├── coco/{annotations, images}
+        ├── lasot
+        └── trackingnet
+```
 
-Leave the rest at the defaults ([all parameters](docs/details.md#4-parameters)). Then run the cells from top to
-bottom: the check cell shows the output folder and what will be downloaded, step 2 runs, step 3 shows the results.
+```bash
+python -m stark_ft download-checkpoints --model-config baseline_R101   # official STARK-ST101 (baseline: ST50)
+python -m stark_ft prepare-train-data --datasets got10k coco           # COCO is downloaded; GOT-10k: docs/train.md
+python -m stark_ft download-dataset                                    # optional: all 50 VOT-LT2020 sequences (17.6 GB)
+```
 
-- A sequence is downloaded the first time it is used (`bull` 58 MB; all 50: 17.6 GB) and then kept (on Colab: on Drive).
-- Time: ~30 ms per frame on an RTX 3060, i.e. `bull` ~1 min, all 50 sequences ~2 h.
-- Interrupted? Run the cell again; finished sequences are skipped. The output folder is named after the parameters,
-  so a different parameter set never overwrites another experiment.
+## Train
 
-**Results** are in `outputs/<experiment>/` (on Colab `MyDrive/LOKAP/outputs/`):
+```bash
+# STARK-ST101, stage 1 (backbone + transformer + box head)
+python -m stark_ft train --set stage=1 --set 'datasets=[got10k, coco]' --set name=st101_s1
+# stage 2 (classification head) on top of it
+python -m stark_ft train --set stage=2 --set 'datasets=[got10k, coco]' --set init=st101_s1 --set name=st101_s2
+# progress
+python -m stark_ft train-report st101_s1
+```
 
-| File | Content |
-|---|---|
-| `metrics/summary.txt` | mAP / AP50 / AP75 first, then precision / recall / F |
-| `metrics/metrics.xlsx` | all metrics, also per sequence |
-| `plots/<seq>/iou_conf.png` | IoU and score per frame, with the template / fine-tuning updates |
-| `predictions/<seq>/` | box and score of every frame |
+Any subset of `got10k, coco, lasot, trackingnet` can be used; `--set model_config=baseline` trains STARK-ST50.
+Stage 2 always needs `init`: a stage-1 run, or `init=official` (STARK's weights, trained on all four datasets).
+Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Details: [docs/train.md](docs/train.md).
 
-## 3. Compare experiments: `02_compare.ipynb`
+## Test
 
-Put the experiment names into `NAMES = [...]` (the first one is the reference) and run the cells. You get the
-metrics side by side, the parameter differences and the per-sequence differences, also as `comparison.xlsx`.
+```bash
+# STARK-ST101 on VOT-LT2020: without fine-tuning / with online fine-tuning of the classification head
+python -m stark_ft test --set ft_mode=none
+python -m stark_ft test --set ft_mode=online --set ft_samples=pos
+# a model trained with this repository
+python -m stark_ft test --set checkpoint=train:st101_s2
+# compare experiments
+python -m stark_ft compare st101_base_int100 st101_online_pos_lr0.0001_i15_o1_int100_s0
+```
 
-## 4. Train STARK-ST: `03_train.ipynb`
+A test downloads the VOT-LT2020 sequences it uses that are not on disk yet (e.g. `bull` 58 MB; all 50: 17.6 GB).
+Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
+Method, parameters, outputs and metrics: [docs/test.md](docs/test.md).
 
-The official STARK-ST weights were trained on four datasets together (LaSOT, GOT-10k, COCO, TrackingNet). This
-notebook trains STARK-ST with the original procedure on the datasets **you** choose, e.g. COCO only, so that the
-effect of the training data can be studied. STARK-ST is trained in two stages:
+## Citation
 
-| Stage | Trains | Length | Starts from |
-|---|---|---|---|
-| 1 | backbone, transformer, box head | 500 epochs | ImageNet backbone |
-| 2 | classification head only | 50 epochs | a finished stage-1 run |
-
-The original used 8 GPUs (128 samples per step). Here one GPU adds up 8 × 16 samples before each step (gradient
-accumulation), which gives the same update, so the training is unchanged.
-
-### 4.1 Data (once)
-
-- **COCO:** nothing to do; it is downloaded automatically (19.6 GB, kept on Drive).
-- **GOT-10k:** needs a free registration at [got-10k.aitestunion.com](http://got-10k.aitestunion.com/downloads);
-  the download links arrive by e-mail. On Colab:
-  1. Open the `full_data.zip` link → *Add shortcut to Drive*.
-  2. Right-click the shortcut → *Make a copy* (uses 70.7 GB of Drive). Why: the shared file often hits Google's
-     daily download limit; your own copy does not.
-  3. Move the copy into `MyDrive/LOKAP/train_archives/got10k/` (step 2 of the notebook creates this folder) and
-     delete the shortcut.
-
-  On Vast.ai / your computer, put the archives into `data/train/_archives/got10k/`.
-
-At the start of every Colab session the archives are extracted to the runtime's local disk (GOT-10k ≈ 35 min),
-because reading the images from Drive during training would be far slower.
-
-### 4.2 Train
-
-**Change only these lines of the `TRAIN` cell (step 1):**
-
-| Goal | `stage` | `datasets` | `init` | `val_datasets` |
-|---|---|---|---|---|
-| COCO, stage 1 | `1` | `["coco"]` | `None` | `[]` |
-| COCO, stage 2 | `2` | `["coco"]` | `"st101_stage1_coco_s42"` | `[]` |
-| GOT-10k, stage 1 | `1` | `["got10k"]` | `None` | `["got10k"]` |
-| GOT-10k, stage 2 | `2` | `["got10k"]` | `"st101_stage1_got10k_s42"` | `["got10k"]` |
-| GOT-10k + COCO, stage 1 | `1` | `["got10k", "coco"]` | `None` | `["got10k"]` |
-| GOT-10k + COCO, stage 2 | `2` | `["got10k", "coco"]` | `"st101_stage1_got10k+coco_s42"` | `["got10k"]` |
-
-- `init` (stage 2) is the name of the finished stage-1 run; it is printed during training and is the folder name in
-  `MyDrive/LOKAP/training/`. `init="official"` would start from STARK's own weights, which saw all four datasets.
-- `val_datasets=["got10k"]` checks the loss on GOT-10k videos that are not used for training; use `[]` when GOT-10k
-  is not prepared.
-- STARK-ST50: `model_config="baseline"` (run names then start with `st50_`).
-
-Then run step 2 (prepares the session and the data, prints the plan: run name, epochs, initial weights) and
-step 3 (trains). If the session ends, run steps 2 and 3 again: training continues from the last finished epoch,
-with exactly the same result as without the interruption. Every run has its own folder `MyDrive/LOKAP/training/<run name>/`.
-
-**Time:** stage 1 reads 30 M samples, stage 2 3 M. On an RTX 3060: stage 2 ≈ 1 day, stage 1 ≈ 17 days; an A100 is
-several times faster. The progress line shows the remaining time after the first minutes; check it before you
-commit to a stage-1 run.
-
-**GOT-10k only, without stage 1:** STARK published weights trained on GOT-10k alone:
-`model_config="baseline_R101_got10k_only", datasets=["got10k_full"], stage=2, init="official"`. They used all
-9 335 GOT-10k videos, including the 1 000 that overlap with VOT and are left out by `got10k`.
-
-### 4.3 Evaluate the trained model
-
-In `01_run_experiment.ipynb`: `checkpoint="train:<stage-2 run name>"` and the same `model_config`.
-
-## 5. Metrics
-
-- **mAP, AP50, AP75** (primary): standard COCO detection metrics; every frame is an image. Frames without the
-  target count too (a box there is a false positive). No score threshold is applied.
-- **F at the best threshold** (`precision_opt`, `recall_opt`, `F_opt`): the VOT-LT protocol, i.e. the score threshold
-  that maximises F over all sequences.
-- `legacy_*`: the computation of the earlier `coco_eval.py`, only for comparing with old results.
-
-Exact definitions: [docs/details.md](docs/details.md#6-metrics).
-
-## 6. Good to know
-
-- vot-toolkit prints "A newer version of the VOT toolkit is available": ignore it, the repo needs version 0.5.3.
-- Training runs out of GPU memory → `micro_batch=8` (same training, only slower). The runtime crashes (RAM) →
-  `num_workers=4`.
-- More: [troubleshooting](docs/details.md#9-troubleshooting), [command line](docs/details.md#8-command-line-cli),
-  [known limitations](docs/details.md#10-known-limitations-and-open-issues),
-  [changes from the earlier code](docs/details.md#11-changes-from-the-earlier-research-code).
-
-## 7. Citation
-
-This repo builds on STARK:
+STARK:
 
 ```bibtex
 @inproceedings{yan2021learning,
@@ -181,9 +91,7 @@ This repo builds on STARK:
 }
 ```
 
-and continues our previous work:
-
-> K. Bal, A. Uslu, A. C. Kılcı and B. Günsel, "Cross-Domain Video Object Detection," *2026 34th Signal Processing and Communications Applications Conference (SIU)*, 2026, pp. 1–4, doi: [10.1109/SIU71813.2026.11636768](https://doi.org/10.1109/SIU71813.2026.11636768).
+Previous work:
 
 ```bibtex
 @inproceedings{bal2026crossdomain,
@@ -195,3 +103,9 @@ and continues our previous work:
   doi={10.1109/SIU71813.2026.11636768}
 }
 ```
+
+## Acknowledgments
+
+The tracker and its training code are from the official [STARK](https://github.com/researchmm/Stark) repository,
+which builds on [PyTracking](https://github.com/visionml/pytracking) and [DETR](https://github.com/facebookresearch/detr).
+Evaluation uses [vot-toolkit](https://github.com/votchallenge/toolkit) and [pycocotools](https://github.com/cocodataset/cocoapi).

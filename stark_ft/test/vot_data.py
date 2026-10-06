@@ -27,7 +27,7 @@ import urllib.parse
 import zipfile
 from pathlib import Path
 
-from stark_ft import train_data
+from stark_ft.download import download
 
 DESCRIPTION_URL = "https://data.votchallenge.net/vot2019/longterm/description.json"  # vot-toolkit's "vot-lt2019"
 # Sequence -> download size in MB (from the official description), in the official order
@@ -86,7 +86,7 @@ def _sha1(path: Path) -> str:
 
 
 def _fetch(url: str, dst_dir: Path, filename: str, checksum: str = None) -> Path:
-    path = train_data.download(url, dst_dir, filename, quiet=True)  # resumes an interrupted download
+    path = download(url, dst_dir, filename, quiet=True)  # resumes an interrupted download
     if checksum and _sha1(path) != checksum:
         path.unlink()
         raise RuntimeError(f"Checksum mismatch for {url}; the file was deleted, run again to download it again.")
@@ -188,7 +188,7 @@ def ensure(names, dataset_dir: Path, cache_dir: Path = None) -> list:
                                f"{dataset_dir}.")
         _log(f"Downloading {len(to_download)} VOT sequence(s) ({size_text(to_download)}) -> {dataset_dir}")
         tmp = dataset_dir / TMP_DIR
-        with open(train_data.download(DESCRIPTION_URL, tmp, "description.json", quiet=True)) as f:
+        with open(download(DESCRIPTION_URL, tmp, "description.json", quiet=True)) as f:
             by_name = {s["name"]: s for s in json.load(f)["sequences"]}
         base_url = DESCRIPTION_URL.rsplit("/", 1)[0] + "/"
         for i, name in enumerate(to_download, 1):

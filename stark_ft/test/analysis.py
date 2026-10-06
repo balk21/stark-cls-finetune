@@ -10,12 +10,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stark_ft import vot_data
-from stark_ft.config import ExperimentConfig
-from stark_ft.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, iou, operating_point,
+from stark_ft.test import vot_data
+from stark_ft.test.config import ExperimentConfig
+from stark_ft.test.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, iou, operating_point,
                                  read_groundtruth, read_vot_result)
 from stark_ft.paths import Paths, get_paths
-from stark_ft.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
+from stark_ft.test.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
 
 # Order of the summary tables: the primary metrics (mAP / AP50 / AP75) first
 SUMMARY_METRICS = ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall", "F1",

@@ -5,7 +5,6 @@ IPython.display.Image).
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 
@@ -164,40 +163,3 @@ def plot_metric_comparison(summary: pd.DataFrame, metrics, out_path=None, title=
     if out_path:
         fig.savefig(out_path, dpi=150, bbox_inches="tight")
     return fig
-
-
-def plot_training_history(history: pd.DataFrame, out_path, run_name: str):
-    """Per-epoch training / validation statistics of a training run (its history.csv). Dashed lines: LR drops."""
-    epoch = history["epoch"].to_numpy(dtype=float)
-    metrics = []
-    for col in history.columns:
-        split, _, metric = col.partition("/")
-        if split in ("train", "val") and metric and metric not in metrics:
-            metrics.append(metric)
-    cols = 2 if len(metrics) > 1 else 1
-    rows = max(1, int(np.ceil(len(metrics) / cols)))
-    fig, axes = plt.subplots(rows, cols, figsize=(6.5 * cols, 3.6 * rows), squeeze=False)
-    lr = history["lr"].to_numpy(dtype=float)
-    drops = epoch[1:][lr[1:] != lr[:-1]] if len(lr) > 1 else []
-    for ax, metric in zip(axes.flat, metrics):
-        for split, style in (("train", dict(color="tab:blue")),
-                             ("val", dict(color="tab:orange", marker="o", markersize=3))):
-            col = f"{split}/{metric}"
-            if col in history.columns:
-                y = history[col].to_numpy(dtype=float)
-                ok = np.isfinite(y)
-                if ok.any():
-                    ax.plot(epoch[ok], y[ok], label=split, **style)
-        for d in drops:
-            ax.axvline(d - 0.5, color="gray", linestyle="--", linewidth=0.8)
-        ax.set_title(metric)
-        ax.set_xlabel("epoch")
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.grid(True, linestyle="--", alpha=0.5)
-        ax.legend(fontsize="small")
-    for ax in list(axes.flat)[len(metrics):]:
-        ax.axis("off")
-    fig.suptitle(f"Training history — {run_name}", fontweight="bold")
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)

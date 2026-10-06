@@ -9,7 +9,8 @@ import threading
 import zipfile
 from pathlib import Path
 
-from stark_ft import train_data as td
+from stark_ft import download as dl
+from stark_ft.train import data as td
 
 NAMES = [f"GOT-10k_Train_{i:06d}" for i in range(1, 6)]
 
@@ -124,10 +125,10 @@ def test_coco_download_and_extract(tmp):
         assert (coco / "annotations" / "instances_train2017.json").is_file()
         assert (archives / "coco" / "train2017.zip").read_bytes() == (server_dir / "train2017.zip").read_bytes()
         # a finished download is found again by its URL without contacting the server (e-mailed links expire)
-        first = td.download(f"{base}/train2017.zip", tmp / "dl")
+        first = dl.download(f"{base}/train2017.zip", tmp / "dl")
     finally:
         server.shutdown()
-    assert td.download(f"{base}/train2017.zip", tmp / "dl") == first
+    assert dl.download(f"{base}/train2017.zip", tmp / "dl") == first
 
 
 @_with_small_counts
@@ -167,8 +168,8 @@ def test_google_drive_links_and_web_pages():
     direct = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t"
     for url in (f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
                 f"https://drive.google.com/open?id={file_id}", f"https://drive.google.com/uc?export=download&id={file_id}"):
-        assert td.direct_url(url) == direct
-    assert td.direct_url("http://images.cocodataset.org/zips/train2017.zip").endswith("train2017.zip")
+        assert dl.direct_url(url) == direct
+    assert dl.direct_url("http://images.cocodataset.org/zips/train2017.zip").endswith("train2017.zip")
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         (tmp / "page.html").write_text("<html>quota exceeded</html>")
@@ -176,13 +177,13 @@ def test_google_drive_links_and_web_pages():
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
-            td.download(f"http://127.0.0.1:{server.server_address[1]}/page.html", tmp / "dl")
+            dl.download(f"http://127.0.0.1:{server.server_address[1]}/page.html", tmp / "dl")
             raise AssertionError("web page accepted as a download")
         except RuntimeError as e:
             assert "web page" in str(e)
         finally:
             server.shutdown()
-        assert not (tmp / "dl" / td.URL_MAP).exists() and not list((tmp / "dl").glob("page*"))
+        assert not (tmp / "dl" / dl.URL_MAP).exists() and not list((tmp / "dl").glob("page*"))
 
 
 if __name__ == "__main__":  # without pytest: python -m tests.test_train_data
