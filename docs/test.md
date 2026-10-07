@@ -70,7 +70,7 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
     --set ft_mode=none --set update_interval=200
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<experiment> --score-thr 0.5        # metrics again, without tracking
-python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png
+python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png  # xlsx: mAP / AP50 / AP75 per experiment
 ```
 
 Notebooks: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. All 50 sequences (≈ 215 k frames) take ≈ 2 h on an

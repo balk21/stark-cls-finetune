@@ -71,7 +71,7 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
     --set ft_mode=none --set update_interval=200
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<deney> --score-thr 0.5             # tracking olmadan metrikleri yeniden hesaplar
-python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png
+python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png  # xlsx: deney başına mAP / AP50 / AP75
 ```
 
 Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop

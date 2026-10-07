@@ -63,14 +63,20 @@ def per_sequence(names, metric="mAP", outputs_dir=None) -> pd.DataFrame:
     return pd.DataFrame(cols)
 
 
+EXCEL_METRICS = ["mAP", "AP50", "AP75"]
+
+
 def export_comparison(names, out_path, outputs_dir=None):
+    """Excel with one row per experiment (in the given order): mAP, AP50, AP75 (mean over sequences)."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    table = load_summaries(names, "mean_over_sequences", outputs_dir)[EXCEL_METRICS].astype(float)
+    table.index.name = "experiment"
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        load_summaries(names, "mean_over_sequences", outputs_dir).to_excel(writer, sheet_name="mean_over_sequences")
-        load_summaries(names, "pooled", outputs_dir).to_excel(writer, sheet_name="pooled")
-        load_parameters(names, outputs_dir, only_different=False).to_excel(writer, sheet_name="parameters")
-        load_summaries(names, "optimal_threshold", outputs_dir).to_excel(writer, sheet_name="optimal_threshold")
-        for m in ("mAP", "AP50", "AP75", "F_opt", "F1"):
-            per_sequence(names, m, outputs_dir).to_excel(writer, sheet_name=f"per_seq_{m}")
+        table.to_excel(writer, sheet_name="results")
+        sheet = writer.sheets["results"]
+        sheet.column_dimensions["A"].width = max(len(n) for n in [table.index.name, *names]) + 2
+        for row in sheet.iter_rows(min_row=2, min_col=2):
+            for cell in row:
+                cell.number_format = "0.0000"
     return out_path
