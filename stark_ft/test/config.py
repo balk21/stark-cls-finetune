@@ -26,6 +26,12 @@ UPDATE_MODES = ("stark", "max")
 NO_UPDATE_INTERVAL = 99999  # conventional value meaning "no template update"
 # Parameters that only affect the analysis: changing them does not invalidate tracking results
 EVAL_ONLY_FIELDS = ("eval_score_thr", "eval_iou_thr", "eval_thr_resolution")
+RUN_ONLY_FIELDS = ("tracker_timeout",)  # how the run is done, not its result
+UPDATE_FIELDS = ("update_mode", "update_interval", "update_conf_thr", "update_iou_thr", "max_template_updates")
+# Not at their default value -> in the experiment name as <tag><value>
+NAME_TAGS = (("update_conf_thr", "uthr"), ("update_iou_thr", "uiou"), ("max_template_updates", "maxupd"),
+             ("max_ft_updates", "maxft"), ("ft_weight_decay", "wd"), ("ft_grad_clip_norm", "clip"),
+             ("ft_center_jitter", "cj"), ("ft_scale_jitter", "sj"), ("seed", "s"))
 
 
 def available_model_configs(model: str) -> List[str]:
@@ -150,7 +156,32 @@ class ExperimentConfig:
             base += "-" + Path(self.weights).name.split(".")[0]
         return base
 
+    def unused_fields(self) -> list:
+        """Parameters that have no effect with the other settings (e.g. ft_epochs_online with ft_mode="init"):
+        they are left out of the experiment name and of the resume check."""
+        ft = [f.name for f in fields(self) if f.name.startswith("ft_") and f.name != "ft_mode"]
+        ft += ["max_ft_updates", "seed"]
+        if self.model == "stark_s":  # no template update, no classification head
+            return list(UPDATE_FIELDS) + ft
+        no_updates = self.update_interval >= NO_UPDATE_INTERVAL
+        unused = []
+        if no_updates:
+            unused += [f for f in UPDATE_FIELDS if f != "update_interval"]
+        elif self.update_mode != "max":
+            unused.append("update_iou_thr")
+        if self.ft_mode == "none":
+            return unused + ft
+        if self.ft_mode == "init" or no_updates:  # no online fine-tuning
+            unused += ["ft_epochs_online", "max_ft_updates"]
+        if not self.ft_pos_jitter:
+            unused += ["ft_center_jitter", "ft_scale_jitter"]
+        return unused
+
     def auto_name(self) -> str:
+        """Model, mode and every parameter that changes the result and is not at its default value."""
+        unused = set(self.unused_fields())
+        defaults = {f.name: f.default for f in fields(self)}
+        changed = [k for k in defaults if k not in unused and getattr(self, k) != defaults[k]]
         parts = [self.short_model_name()]
         if self.model == "stark_st":
             interval = "noupd" if self.update_interval >= NO_UPDATE_INTERVAL else \
@@ -159,19 +190,16 @@ class ExperimentConfig:
                 parts += ["base", interval]
             else:
                 parts += [self.ft_mode, self.ft_samples, f"lr{self.ft_lr:g}", f"i{self.ft_epochs_init}"]
-                if self.ft_mode == "online":
+                if "ft_epochs_online" not in unused:
                     parts.append(f"o{self.ft_epochs_online}")
-                parts += [interval, f"s{self.seed}"]
-            if self.update_conf_thr != 0.5:
-                parts.append(f"uthr{self.update_conf_thr:g}")
-            if self.update_mode == "max" and self.update_iou_thr != 0.5:
-                parts.append(f"uiou{self.update_iou_thr:g}")
-            if self.max_template_updates >= 0:
-                parts.append(f"maxupd{self.max_template_updates}")
-            if self.max_ft_updates >= 0 and self.ft_mode == "online":
-                parts.append(f"maxft{self.max_ft_updates}")
+                parts.append(interval)
+            parts += [f"{tag}{getattr(self, key):g}" for key, tag in NAME_TAGS if key in changed]
+            if "ft_pos_jitter" in changed:
+                parts.append("nojit")
         else:
             parts.append("base")
+        if self.run_redetection:
+            parts.append("redet")
         if self.dataset != datasets.VOT:
             parts.append(self.dataset.replace("_", "-"))  # e.g. got10k-val
         if self.sequences != "all":
@@ -188,7 +216,8 @@ class ExperimentConfig:
 
     def tracking_dict(self) -> dict:
         """Parameters that affect the tracking result (used for the resume / overwrite decision)."""
-        return {k: v for k, v in asdict(self).items() if k not in EVAL_ONLY_FIELDS}
+        skip = {"name", *EVAL_ONLY_FIELDS, *RUN_ONLY_FIELDS, *self.unused_fields()}
+        return {k: v for k, v in asdict(self).items() if k not in skip}
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExperimentConfig":

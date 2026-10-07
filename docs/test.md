@@ -173,7 +173,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated, e.g. `st101_online_pos_lr0.0001_i15_o1_int100_s0` (`max100` with `update_mode="max"`). |
+| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated from the model, the mode and every parameter that changes the result and is not at its default, e.g. `st101_online_pos_lr0.0001_i15_o1_int100` (`max100` with `update_mode="max"`, `_s1` with `seed=1`, `_wd0` with `ft_weight_decay=0`). Parameters that have no effect with the other settings (e.g. `ft_epochs_online` with `ft_mode="init"`) are not in the name and do not prevent resuming; `show` / `nb.describe` marks them. |
 | `model` | `"stark_st"` | `"stark_st"` or `"stark_s"` (no score; reports 1.0; needs `ft_mode="none"`). |
 | `model_config` | `"baseline_R101"` | YAML in `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) or `model_configs/stark_s/`. |
 | `weights` | `"official"` | `"official"`, a stage-2 run trained here, or a checkpoint file / path (see [Weights](#weights)). (Earlier name: `checkpoint`.) |
@@ -195,7 +195,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `ft_center_jitter` | `4.5` | Centre shift within a window of `sqrt(w·h)·4.5` (stage 2: 4.5). |
 | `ft_scale_jitter` | `0.5` | Size × `exp(N(0,1)·0.5)` (stage 2: 0.5). |
 | `max_ft_updates` | `-1` | Online fine-tunings per sequence; `-1` = unlimited. |
-| `seed` | `0` | Same seed and parameters give exactly the same result (on the same GPU type). |
+| `seed` | `0` | Same seed and parameters give exactly the same result (on the same GPU type). In the name when not 0 (`_s1`). |
 | `eval_score_thr` | `0.35` | Fixed threshold for P / R / F1 (does not affect mAP or the F-max threshold). |
 | `eval_iou_thr` | `0.5` | IoU of a correct detection (fixed threshold and F-max search). |
 | `eval_thr_resolution` | `100` | Candidate thresholds in the F-max search (vot-toolkit: 100). |

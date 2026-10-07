@@ -175,7 +175,7 @@ ve/veya `--set anahtar=değer`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100_s0` (`update_mode="max"` ile `max100`). |
+| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: modelden, moddan ve sonucu değiştiren, varsayılan değerinde olmayan her parametreden üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100` (`update_mode="max"` ile `max100`, `seed=1` ile `_s1`, `ft_weight_decay=0` ile `_wd0`). Diğer ayarlarla etkisi olmayan parametreler (örn. `ft_mode="init"` iken `ft_epochs_online`) adda yer almaz ve devam etmeyi engellemez; `show` / `nb.describe` bunları işaretler. |
 | `model` | `"stark_st"` | `"stark_st"` veya `"stark_s"` (skor yok; 1.0 raporlar; `ft_mode="none"` gerekir). |
 | `model_config` | `"baseline_R101"` | `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) veya `model_configs/stark_s/` altındaki YAML. |
 | `weights` | `"official"` | `"official"`, burada eğitilmiş bir aşama-2 koşusu ya da bir checkpoint dosyası / yolu (bkz. [Ağırlıklar](#ağırlıklar)). (Eski adı: `checkpoint`.) |
@@ -197,7 +197,7 @@ ve/veya `--set anahtar=değer`.
 | `ft_center_jitter` | `4.5` | Merkez, `sqrt(w·h)·4.5` genişliğinde bir pencerede kaydırılır (aşama 2: 4.5). |
 | `ft_scale_jitter` | `0.5` | Boyut × `exp(N(0,1)·0.5)` (aşama 2: 0.5). |
 | `max_ft_updates` | `-1` | Dizi başına online fine-tune sayısı; `-1` = sınırsız. |
-| `seed` | `0` | Aynı seed ve parametreler birebir aynı sonucu verir (aynı GPU tipinde). |
+| `seed` | `0` | Aynı seed ve parametreler birebir aynı sonucu verir (aynı GPU tipinde). 0 değilse adda yer alır (`_s1`). |
 | `eval_score_thr` | `0.35` | P / R / F1 için sabit eşik (mAP'yi ve F-maksimum eşiği etkilemez). |
 | `eval_iou_thr` | `0.5` | Doğru tespit için IoU (sabit eşik ve F-maksimum araması). |
 | `eval_thr_resolution` | `100` | F-maksimum aramasındaki aday eşik sayısı (vot-toolkit: 100). |

@@ -1,9 +1,11 @@
-"""ExperimentConfig: reading from files (the path used by the notebooks) and parameter type coercion."""
+"""ExperimentConfig: reading from files (the path used by the notebooks), parameter type coercion, experiment
+names and the resume check."""
 import json
 import tempfile
+from dataclasses import fields, replace
 from pathlib import Path
 
-from stark_ft.test.config import ExperimentConfig
+from stark_ft.test.config import EVAL_ONLY_FIELDS, RUN_ONLY_FIELDS, ExperimentConfig
 
 
 def test_from_file_json_and_yaml():
@@ -37,6 +39,40 @@ def test_coercion_and_errors():
             pass
         else:
             raise AssertionError(f"no error for {bad}")
+
+
+# A different valid value for every parameter (a new parameter has to be added here and to the experiment name)
+OTHER_VALUE = {
+    "model": "stark_s", "model_config": "baseline", "weights": "st101_coco_stage2", "dataset": "got10k_val",
+    "sequences": ["ballet"], "update_mode": "stark", "update_interval": 200, "update_conf_thr": 0.8,
+    "update_iou_thr": 0.7, "max_template_updates": 3, "ft_mode": "init", "ft_samples": "posneg", "ft_lr": 1e-5,
+    "ft_epochs_init": 5, "ft_epochs_online": 5, "ft_weight_decay": 0.0, "ft_grad_clip_norm": 1.0,
+    "ft_pos_jitter": False, "ft_center_jitter": 3.0, "ft_scale_jitter": 0.25, "max_ft_updates": 2, "seed": 1,
+    "run_redetection": True,
+}
+
+
+def test_every_parameter_that_changes_the_result_is_in_the_name():
+    base = ExperimentConfig(sequences=["bull"], update_mode="max")  # every parameter is used
+    assert base.unused_fields() == []
+    for f in fields(ExperimentConfig):
+        if f.name in ("name", *EVAL_ONLY_FIELDS, *RUN_ONLY_FIELDS):
+            continue
+        other = replace(base, **{f.name: OTHER_VALUE[f.name]})
+        assert other.experiment_name != base.experiment_name, f.name
+        assert other.tracking_dict() != base.tracking_dict(), f.name
+    assert base.experiment_name == "st101_online_pos_lr0.0001_i15_o1_max100_bull"  # default seed: not in the name
+
+
+def test_unused_parameters_do_not_block_resuming():
+    init = ExperimentConfig(ft_mode="init", sequences=["bull"])
+    none = ExperimentConfig(ft_mode="none", sequences=["bull"])
+    for cfg, unused in ((init, dict(ft_epochs_online=5, max_ft_updates=2, update_iou_thr=0.7)),
+                        (none, dict(seed=3, ft_lr=1e-5, ft_epochs_online=5)),
+                        (replace(init, ft_pos_jitter=False), dict(ft_center_jitter=3.0)),
+                        (init, dict(tracker_timeout=600, eval_score_thr=0.5))):
+        other = replace(cfg, **unused)
+        assert other.experiment_name == cfg.experiment_name and other.tracking_dict() == cfg.tracking_dict(), unused
 
 
 if __name__ == "__main__":  # without pytest: python -m tests.test_test_config

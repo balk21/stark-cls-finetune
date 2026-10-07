@@ -149,6 +149,7 @@ def cmd_show(args):
         "output_exists": (paths.outputs / cfg.experiment_name).exists(),
         "weights": w,
         "config": cfg.to_dict(),
+        "unused": cfg.unused_fields(),
     }
     try:
         info["sequences"] = resolve_sequences(cfg, paths, fetch=False)
@@ -173,7 +174,7 @@ def cmd_show(args):
         print(f"Sequences   : ERROR - {info['sequences_error']}")
     print("Parameters:")
     for k, v in info["config"].items():
-        print(f"  {k:22s} = {v!r}")
+        print(f"  {k:22s} = {v!r}{'   (not used with these settings)' if k in info['unused'] else ''}")
     return 0 if not w["problem"] and "sequences" in info else 1
 
 
