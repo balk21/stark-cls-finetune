@@ -173,7 +173,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated from the model, the mode and every parameter that changes the result and is not at its default, e.g. `st101_online_pos_lr0.0001_i15_o1_int100` (`max100` with `update_mode="max"`, `_s1` with `seed=1`, `_wd0` with `ft_weight_decay=0`). Parameters that have no effect with the other settings (e.g. `ft_epochs_online` with `ft_mode="init"`) are not in the name and do not prevent resuming; `show` / `nb.describe` marks them. |
+| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated from the model, the mode and every parameter that changes the result and is not at its default, e.g. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: fine-tuning steps on the first frame + at every template update; `init`: `ep15`; `max100` with `update_mode="max"`, `_s1` with `seed=1`, `_wd0` with `ft_weight_decay=0`). Parameters that have no effect with the other settings (e.g. `ft_epochs_online` with `ft_mode="init"`) are not in the name and do not prevent resuming; `show` / `nb.describe` marks them. |
 | `model` | `"stark_st"` | `"stark_st"` or `"stark_s"` (no score; reports 1.0; needs `ft_mode="none"`). |
 | `model_config` | `"baseline_R101"` | YAML in `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) or `model_configs/stark_s/`. |
 | `weights` | `"official"` | `"official"`, a stage-2 run trained here, or a checkpoint file / path (see [Weights](#weights)). (Earlier name: `checkpoint`.) |

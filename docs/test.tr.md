@@ -175,7 +175,7 @@ ve/veya `--set anahtar=değer`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: modelden, moddan ve sonucu değiştiren, varsayılan değerinde olmayan her parametreden üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100` (`update_mode="max"` ile `max100`, `seed=1` ile `_s1`, `ft_weight_decay=0` ile `_wd0`). Diğer ayarlarla etkisi olmayan parametreler (örn. `ft_mode="init"` iken `ft_epochs_online`) adda yer almaz ve devam etmeyi engellemez; `show` / `nb.describe` bunları işaretler. |
+| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: modelden, moddan ve sonucu değiştiren, varsayılan değerinde olmayan her parametreden üretilir, örn. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: ilk karedeki + her template update'teki fine-tune adımı; `init`: `ep15`; `update_mode="max"` ile `max100`, `seed=1` ile `_s1`, `ft_weight_decay=0` ile `_wd0`). Diğer ayarlarla etkisi olmayan parametreler (örn. `ft_mode="init"` iken `ft_epochs_online`) adda yer almaz ve devam etmeyi engellemez; `show` / `nb.describe` bunları işaretler. |
 | `model` | `"stark_st"` | `"stark_st"` veya `"stark_s"` (skor yok; 1.0 raporlar; `ft_mode="none"` gerekir). |
 | `model_config` | `"baseline_R101"` | `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) veya `model_configs/stark_s/` altındaki YAML. |
 | `weights` | `"official"` | `"official"`, burada eğitilmiş bir aşama-2 koşusu ya da bir checkpoint dosyası / yolu (bkz. [Ağırlıklar](#ağırlıklar)). (Eski adı: `checkpoint`.) |

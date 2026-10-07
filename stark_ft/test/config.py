@@ -171,7 +171,7 @@ class ExperimentConfig:
             unused.append("update_iou_thr")
         if self.ft_mode == "none":
             return unused + ft
-        if self.ft_mode == "init" or no_updates:  # no online fine-tuning
+        if self.ft_mode == "init":  # no fine-tuning at the template updates
             unused += ["ft_epochs_online", "max_ft_updates"]
         if not self.ft_pos_jitter:
             unused += ["ft_center_jitter", "ft_scale_jitter"]
@@ -189,10 +189,9 @@ class ExperimentConfig:
             if self.ft_mode == "none":
                 parts += ["base", interval]
             else:
-                parts += [self.ft_mode, self.ft_samples, f"lr{self.ft_lr:g}", f"i{self.ft_epochs_init}"]
-                if "ft_epochs_online" not in unused:
-                    parts.append(f"o{self.ft_epochs_online}")
-                parts.append(interval)
+                # fine-tuning steps: ep<first frame> (init) | ep<first frame>+<every template update> (online)
+                epochs = f"ep{self.ft_epochs_init}" + (f"+{self.ft_epochs_online}" if self.ft_mode == "online" else "")
+                parts += [self.ft_mode, self.ft_samples, f"lr{self.ft_lr:g}", epochs, interval]
             parts += [f"{tag}{getattr(self, key):g}" for key, tag in NAME_TAGS if key in changed]
             if "ft_pos_jitter" in changed:
                 parts.append("nojit")

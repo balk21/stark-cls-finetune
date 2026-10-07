@@ -61,7 +61,11 @@ def test_every_parameter_that_changes_the_result_is_in_the_name():
         other = replace(base, **{f.name: OTHER_VALUE[f.name]})
         assert other.experiment_name != base.experiment_name, f.name
         assert other.tracking_dict() != base.tracking_dict(), f.name
-    assert base.experiment_name == "st101_online_pos_lr0.0001_i15_o1_max100_bull"  # default seed: not in the name
+    assert base.experiment_name == "st101_online_pos_lr0.0001_ep15+1_max100_bull"  # default seed: not in the name
+    # online: steps on the first frame + at every update, also without updates; init: first frame only
+    assert replace(base, ft_epochs_online=15, update_interval=99999).experiment_name == \
+        "st101_online_pos_lr0.0001_ep15+15_noupd_bull"
+    assert replace(base, ft_mode="init").experiment_name == "st101_init_pos_lr0.0001_ep15_max100_bull"
 
 
 def test_unused_parameters_do_not_block_resuming():
