@@ -100,7 +100,8 @@ into `<train_data>/got10k/<split>/`. Every sequence's result is written when it 
 continues with the remaining sequences.
 
 STARK's weights trained on GOT-10k only are `model_config="baseline_R101_got10k_only"` (ST101) or
-`"baseline_got10k_only"` (ST50) with `weights="official"`; they can be tested on GOT-10k and on VOT-LT2020 alike.
+`"baseline_got10k_only"` (ST50; S50 with `model="stark_s"`) with `weights="official"` ([Weights](#weights)); they can
+be tested on GOT-10k and on VOT-LT2020 alike.
 STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
 
 ## Common settings
@@ -115,8 +116,9 @@ STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
 | Template update with the best frame of every N frames | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Sequences | `sequences=["bull", "ballet"]` or `"all"` |
 | GOT-10k instead of VOT-LT2020 | `dataset="got10k_val"` / `"got10k_test"` / `"got10k_train"` |
-| STARK's GOT-10k-only weights | `model_config="baseline_R101_got10k_only"` (ST50: `"baseline_got10k_only"`) |
+| STARK's GOT-10k-only weights | `model_config="baseline_R101_got10k_only"` (ST50 / S50: `"baseline_got10k_only"`) |
 | STARK-ST50 instead of ST101 | `model_config="baseline"` |
+| STARK-S50 | `model="stark_s"`, `model_config="baseline"`, `ft_mode="none"` |
 | A model trained with this repository | `weights="<stage-2 run name>"` (same `model_config`) |
 
 ## Weights
@@ -127,7 +129,24 @@ STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
 |---|---|
 | `"official"` (default) | STARK's published weights for `model_config` (trained on LaSOT + GOT-10k + COCO + TrackingNet; `*_got10k_only`: GOT-10k). Downloaded to `<checkpoints>` automatically when first used. |
 | `"<run name>"` | A finished **stage-2** run trained here, e.g. `"st101_coco_stage2"` ([train.md](train.md#our-runs-and-the-official-weights)). It must have the same `model_config`; stage-1 and unfinished runs are refused. |
-| file name / path | Any other checkpoint: a file name is looked up in `<checkpoints>/stark_st2/<model_config>/`, a value with `/` is a path. |
+| file name / path | Any other checkpoint: a file name is looked up in `<checkpoints>/<stark_st2\|stark_s>/<model_config>/`, a value with `/` is a path. |
+
+The official weights (STARK's [model zoo](https://github.com/researchmm/Stark/blob/main/MODEL_ZOO.md)):
+
+| Model | `model` | `model_config` | Trained on | Name prefix | File in `<checkpoints>` |
+|---|---|---|---|---|---|
+| STARK-ST101 | `stark_st` | `baseline_R101` | LaSOT + GOT-10k + COCO + TrackingNet | `st101` | `stark_st2/baseline_R101/STARKST_ep0050.pth.tar` (191 MB) |
+| | `stark_st` | `baseline_R101_got10k_only` | GOT-10k | `st101got` | `stark_st2/baseline_R101_got10k_only/STARKST_ep0050.pth.tar` (191 MB) |
+| STARK-ST50 | `stark_st` | `baseline` | LaSOT + GOT-10k + COCO + TrackingNet | `st50` | `stark_st2/baseline/STARKST_ep0050.pth.tar` (114 MB) |
+| | `stark_st` | `baseline_got10k_only` | GOT-10k | `st50got` | `stark_st2/baseline_got10k_only/STARKST_ep0050.pth.tar` (114 MB) |
+| STARK-S50 | `stark_s` | `baseline` | LaSOT + GOT-10k + COCO + TrackingNet | `s50` | `stark_s/baseline/STARKS_ep0500.pth.tar` |
+| | `stark_s` | `baseline_got10k_only` | GOT-10k | `s50got` | `stark_s/baseline_got10k_only/STARKS_ep0500.pth.tar` |
+
+Each file is downloaded the first time a test (or `smoke`, or a stage-2 training with `init="official"`) needs it; in
+advance: `python -m stark_ft download-checkpoints --model stark_s --model-config baseline baseline_got10k_only`
+(notebook: `nb.download_checkpoints(["baseline", "baseline_got10k_only"], model="stark_s")`). STARK-S has no
+classification head: it reports a score of 1.0 in every frame (so the score-based metrics say nothing) and needs
+`ft_mode="none"`.
 
 `python -m stark_ft weights` (notebook: `nb.list_weights()`) lists them by origin: the official weights, runs trained
 here from ImageNet, and runs trained here on top of the official weights. `show` / `nb.describe` prints which weights a

@@ -114,7 +114,7 @@ def resolve(weights: str, model: str, model_config: str, paths: Paths = None, do
     if weights == OFFICIAL and not path.is_file():
         if not download:
             raise FileNotFoundError(f"Official weights not downloaded yet: {path}")
-        download_checkpoints([(model, model_config)])
+        download_checkpoints([(model, model_config)], paths=paths)
     return path
 
 

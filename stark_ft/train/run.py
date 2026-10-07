@@ -80,7 +80,7 @@ def resolve_init(tc: TrainConfig, paths: Paths, download: bool = False):
         # 2 from the official stage-1 weights.
         path = paths.checkpoints / "stark_st2" / tc.model_config / OFFICIAL_STAGE2
         if not path.is_file() and download:
-            download_checkpoints([("stark_st", tc.model_config)])
+            download_checkpoints([("stark_st", tc.model_config)], paths=paths)
         return path, ("cls_head.",), "official"
     run_dir = paths.train_outputs / init
     if (run_dir / "train_config.json").is_file():

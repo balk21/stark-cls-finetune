@@ -101,7 +101,8 @@ kullanıldığında, eğitim verisiyle aynı GOT-10k arşivlerinden (`<archives>
 kalan dizilerle devam eder.
 
 STARK'ın yalnızca GOT-10k ile eğitilmiş ağırlıkları `weights="official"` ile `model_config="baseline_R101_got10k_only"`
-(ST101) veya `"baseline_got10k_only"` (ST50)'dir; hem GOT-10k'da hem VOT-LT2020'de test edilebilirler. STARK GOT-10k'da
+(ST101) veya `"baseline_got10k_only"` (ST50; S50 için `model="stark_s"`)'dir ([Ağırlıklar](#ağırlıklar)); hem
+GOT-10k'da hem VOT-LT2020'de test edilebilirler. STARK GOT-10k'da
 `update_interval=200` kullandı (VOT-LT'de 100).
 
 ## Sık kullanılan ayarlar
@@ -116,8 +117,9 @@ STARK'ın yalnızca GOT-10k ile eğitilmiş ağırlıkları `weights="official"`
 | Her N karenin en iyi karesiyle template update | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
 | VOT-LT2020 yerine GOT-10k | `dataset="got10k_val"` / `"got10k_test"` / `"got10k_train"` |
-| STARK'ın yalnızca GOT-10k ağırlıkları | `model_config="baseline_R101_got10k_only"` (ST50: `"baseline_got10k_only"`) |
+| STARK'ın yalnızca GOT-10k ağırlıkları | `model_config="baseline_R101_got10k_only"` (ST50 / S50: `"baseline_got10k_only"`) |
 | ST101 yerine STARK-ST50 | `model_config="baseline"` |
+| STARK-S50 | `model="stark_s"`, `model_config="baseline"`, `ft_mode="none"` |
 | Bu repoyla eğitilmiş bir model | `weights="<aşama-2 koşu adı>"` (aynı `model_config`) |
 
 ## Ağırlıklar
@@ -128,7 +130,24 @@ STARK'ın yalnızca GOT-10k ile eğitilmiş ağırlıkları `weights="official"`
 |---|---|
 | `"official"` (varsayılan) | `model_config` için STARK'ın yayımladığı ağırlıklar (LaSOT + GOT-10k + COCO + TrackingNet ile eğitildi; `*_got10k_only`: GOT-10k). İlk kullanıldığında `<checkpoints>` klasörüne otomatik indirilir. |
 | `"<koşu adı>"` | Burada eğitilmiş, tamamlanmış bir **aşama-2** koşusu, örn. `"st101_coco_stage2"` ([train.tr.md](train.tr.md#bizim-koşularımız-ve-resmi-ağırlıklar)). Aynı `model_config` ile kullanılmalıdır; aşama-1 ve tamamlanmamış koşular reddedilir. |
-| dosya adı / yol | Başka herhangi bir checkpoint: dosya adı `<checkpoints>/stark_st2/<model_config>/` içinde aranır, `/` içeren değer yoldur. |
+| dosya adı / yol | Başka herhangi bir checkpoint: dosya adı `<checkpoints>/<stark_st2\|stark_s>/<model_config>/` içinde aranır, `/` içeren değer yoldur. |
+
+Resmi ağırlıklar (STARK'ın [model zoo](https://github.com/researchmm/Stark/blob/main/MODEL_ZOO.md)'su):
+
+| Model | `model` | `model_config` | Eğitildiği veri | Ad öneki | `<checkpoints>` içindeki dosya |
+|---|---|---|---|---|---|
+| STARK-ST101 | `stark_st` | `baseline_R101` | LaSOT + GOT-10k + COCO + TrackingNet | `st101` | `stark_st2/baseline_R101/STARKST_ep0050.pth.tar` (191 MB) |
+| | `stark_st` | `baseline_R101_got10k_only` | GOT-10k | `st101got` | `stark_st2/baseline_R101_got10k_only/STARKST_ep0050.pth.tar` (191 MB) |
+| STARK-ST50 | `stark_st` | `baseline` | LaSOT + GOT-10k + COCO + TrackingNet | `st50` | `stark_st2/baseline/STARKST_ep0050.pth.tar` (114 MB) |
+| | `stark_st` | `baseline_got10k_only` | GOT-10k | `st50got` | `stark_st2/baseline_got10k_only/STARKST_ep0050.pth.tar` (114 MB) |
+| STARK-S50 | `stark_s` | `baseline` | LaSOT + GOT-10k + COCO + TrackingNet | `s50` | `stark_s/baseline/STARKS_ep0500.pth.tar` |
+| | `stark_s` | `baseline_got10k_only` | GOT-10k | `s50got` | `stark_s/baseline_got10k_only/STARKS_ep0500.pth.tar` |
+
+Her dosya, bir test (ya da `smoke`, ya da `init="official"` ile aşama-2 eğitimi) ona ilk ihtiyaç duyduğunda indirilir;
+önceden: `python -m stark_ft download-checkpoints --model stark_s --model-config baseline baseline_got10k_only`
+(notebook: `nb.download_checkpoints(["baseline", "baseline_got10k_only"], model="stark_s")`). STARK-S'in
+sınıflandırma başlığı yoktur: her karede 1.0 skor raporlar (skora dayalı metrikler bir şey söylemez) ve
+`ft_mode="none"` gerektirir.
 
 `python -m stark_ft weights` (notebook: `nb.list_weights()`) bunları kökenlerine göre listeler: resmi ağırlıklar,
 burada ImageNet'ten eğitilen koşular ve burada resmi ağırlıkların üzerine eğitilen koşular. `show` / `nb.describe` bir

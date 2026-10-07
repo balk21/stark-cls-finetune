@@ -31,7 +31,8 @@ Put the data in `./data` and the official checkpoints in `./checkpoints` (or set
 ```
 ${ROOT}
 ├── checkpoints                      # official STARK weights (downloaded when used)
-│   └── stark_st2/baseline_R101/STARKST_ep0050.pth.tar
+│   ├── stark_st2/<model_config>/STARKST_ep0050.pth.tar   # ST101, ST50
+│   └── stark_s/<model_config>/STARKS_ep0500.pth.tar      # S50
 └── data
     ├── votlt2020/sequences          # test (downloaded on demand)
     └── train                        # training
@@ -85,6 +86,15 @@ python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_base_
 checkpoint file. `dataset`: `votlt2020` (default; vot-toolkit), `got10k_val`, `got10k_test`, `got10k_train`. VOT
 sequences are downloaded automatically (e.g. `bull` 58 MB; `sequences=all`: 50, 17.6 GB); GOT-10k splits are extracted
 from the GOT-10k archives (docs/train.md).
+
+
+| Model | `model` | `model_config` | Official weights trained on |
+|---|---|---|---|
+| STARK-ST101 | `stark_st` | `baseline_R101` / `baseline_R101_got10k_only` | LaSOT + GOT-10k + COCO + TrackingNet / GOT-10k |
+| STARK-ST50 | `stark_st` | `baseline` / `baseline_got10k_only` | as above |
+| STARK-S50 | `stark_s` | `baseline` / `baseline_got10k_only` | as above (no confidence score: `ft_mode=none`) |
+
+Each of the six is downloaded into `checkpoints/` the first time a test uses it.
 Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
 Method, parameters, outputs and metrics: [docs/test.md](docs/test.md).
 

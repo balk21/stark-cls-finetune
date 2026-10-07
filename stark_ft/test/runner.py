@@ -180,7 +180,9 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
                 old_cfg = ExperimentConfig.from_dict(old.get("config", {})).tracking_dict()
             except ValueError:
                 old_cfg = None
-            same = old_cfg == cfg.tracking_dict() and old.get("checkpoint") == str(checkpoint)
+            same_weights = bool(old.get("checkpoint")) and \
+                Path(old["checkpoint"]).resolve() == Path(checkpoint).resolve()  # the same file, e.g. via a link
+            same = old_cfg == cfg.tracking_dict() and same_weights
             old_code = old.get("code_hash")
         if not overwrite and not same:
             raise ExperimentExistsError(

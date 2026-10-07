@@ -72,9 +72,9 @@ def _ensure_gdown():
     return importlib.import_module("gdown")
 
 
-def download_checkpoints(models=(("stark_st", "baseline_R101"),), force=False):
+def download_checkpoints(models=(("stark_st", "baseline_R101"),), force=False, paths=None):
     """Downloads official checkpoints into <checkpoints>/<stark_st2|stark_s>/<model_config>/."""
-    paths = get_paths()
+    paths = paths or get_paths()
     gdown = None
     for model, model_config in models:
         key = (model, model_config)

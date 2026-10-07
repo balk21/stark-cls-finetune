@@ -71,12 +71,12 @@ def test_official_is_downloaded_when_missing():
         assert info["problem"] is None and "GOT-10k only" in info["origin"] and "automatically" in info["note"]
         calls = []
         original = weights.download_checkpoints
-        weights.download_checkpoints = lambda models: calls.append(list(models))
+        weights.download_checkpoints = lambda models, paths=None: calls.append((list(models), paths))
         try:
             weights.resolve("official", "stark_st", "baseline_R101", paths)
         finally:
             weights.download_checkpoints = original
-        assert calls == [[("stark_st", "baseline_R101")]]
+        assert calls == [([("stark_st", "baseline_R101")], paths)]  # into the given <checkpoints>
 
 
 def test_weights_are_listed_by_origin():
