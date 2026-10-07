@@ -42,8 +42,10 @@ def build_tracker(cfg: ExperimentConfig, checkpoint: Path, log_dir=None):
         from lib.test.tracker.stark_s import STARK_S
         return STARK_S(params)
 
+    params.update_mode = cfg.update_mode
     params.update_intervals = [cfg.update_interval]
     params.update_conf_thr = cfg.update_conf_thr
+    params.update_iou_thr = cfg.update_iou_thr
     params.max_template_updates = cfg.max_template_updates
 
     if cfg.ft_mode == "none":

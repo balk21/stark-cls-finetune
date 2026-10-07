@@ -4,6 +4,7 @@ model: stark_st
 model_config: baseline_R101
 weights: official          # or a stage-2 run trained here (python -m stark_ft weights)
 sequences: [bull]         # downloaded automatically; all = the 50 VOT-LT2020 sequences
+update_mode: stark        # or max: the best-scoring frame of every update_interval frames
 update_interval: 100
 ft_mode: online
 ft_samples: pos

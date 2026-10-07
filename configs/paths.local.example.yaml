@@ -6,3 +6,4 @@
 # outputs: /data/stark_outputs
 # train_data: /data/tracking_train_sets
 # train_outputs: /data/stark_training
+# archives: /data/dataset_archives                 # COCO / GOT-10k archives (default <train_data>/_archives)

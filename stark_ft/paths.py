@@ -7,7 +7,7 @@ Priority (later entries override earlier ones):
   2. configs/paths.yaml          (in the repository; relative paths are resolved against the repository root)
   3. configs/paths.local.yaml    (ignored by git; for machine-specific settings)
   4. Environment variables: STARK_CLEAN_CHECKPOINTS, STARK_CLEAN_DATASET, STARK_CLEAN_DATASET_CACHE,
-     STARK_CLEAN_OUTPUTS, STARK_CLEAN_TRAIN_DATA, STARK_CLEAN_TRAIN_OUTPUTS
+     STARK_CLEAN_OUTPUTS, STARK_CLEAN_TRAIN_DATA, STARK_CLEAN_TRAIN_OUTPUTS, STARK_CLEAN_ARCHIVES
 """
 import os
 from dataclasses import dataclass
@@ -26,6 +26,7 @@ _KEYS = {
     "outputs": "STARK_CLEAN_OUTPUTS",
     "train_data": "STARK_CLEAN_TRAIN_DATA",
     "train_outputs": "STARK_CLEAN_TRAIN_OUTPUTS",
+    "archives": "STARK_CLEAN_ARCHIVES",
 }
 _DEFAULTS = {
     "checkpoints": "checkpoints",
@@ -34,6 +35,7 @@ _DEFAULTS = {
     "outputs": "outputs",
     "train_data": "data/train",
     "train_outputs": "outputs/training",
+    "archives": None,
 }
 
 
@@ -45,6 +47,7 @@ class Paths:
     train_data: Path   # Training datasets: <train_data>/{got10k/train, coco, lasot, trackingnet}
     train_outputs: Path  # Each training run is written to <train_outputs>/<run name>/
     dataset_cache: Optional[Path] = None  # Optional: a copy of every downloaded sequence (<sequence>.tar)
+    archives: Optional[Path] = None   # Dataset archives (COCO, GOT-10k); default <train_data>/_archives
 
     def as_dict(self):
         return {k: (str(v) if v is not None else None) for k, v in self.__dict__.items()}
@@ -73,7 +76,10 @@ def get_paths() -> Paths:
     for key, env in _KEYS.items():
         if os.environ.get(env):
             values[key] = os.environ[env]
-    return Paths(**{k: (_resolve(v) if v else None) for k, v in values.items()})
+    paths = Paths(**{k: (_resolve(v) if v else None) for k, v in values.items()})
+    if paths.archives is None:
+        paths.archives = paths.train_data / "_archives"
+    return paths
 
 
 def list_sequences(dataset_dir: Path):

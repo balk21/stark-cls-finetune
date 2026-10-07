@@ -82,7 +82,8 @@ python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL_O
   Google's daily download limit ("Quota exceeded"), in which case make a copy of the file in your own Drive and use
   that (see [colab.md](colab.md#got-10k-from-google-drive)). Only the train videos and `list.txt` are extracted, also
   from archives inside archives; all 9 335 videos must be present. The same archive twice (e.g. your copy and a
-  shortcut to the shared file) is extracted only once.
+  shortcut to the shared file) is extracted only once. The same archives also give the GOT-10k val and test splits
+  used for testing ([test.md](test.md#datasets)); each split is extracted only when it is used.
 - Archives are kept, so another machine / session only extracts them. Extraction goes into a temporary folder that is
   renamed when complete, free disk space is checked first, and a dataset folder that already has the expected layout
   is only read. An extracted GOT-10k copy can be used directly: set `train_data` so that

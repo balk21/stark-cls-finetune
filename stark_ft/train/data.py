@@ -6,161 +6,28 @@ Preparing the training datasets in the layout expected by lib/train/dataset:
     <train_data>/got10k/train/list.txt
     <train_data>/got10k/train/GOT-10k_Train_000001/ ...           (9335 sequences)
 
-COCO 2017 is downloaded from the official server (images.cocodataset.org). GOT-10k can only be downloaded after a
-(free) registration on http://got-10k.aitestunion.com/downloads, which sends the download links by e-mail, so it is
-prepared from the official archives (e.g. full_data.zip, or the train split zips; archives inside archives are
-extracted as well), given in `got10k_urls` (notebook: got10k_sources) as
-  - download links (Google Drive share links such as https://drive.google.com/file/d/<id>/view are converted to
-    direct downloads), or
-  - paths of archives / folders, used in place (e.g. a shortcut on the mounted Google Drive in Colab),
-or put into <archives>/got10k/. Only the GOT-10k train videos (and list.txt files) are extracted from them.
-
-The archives are kept in an archive folder (default <train_data>/_archives; on Colab a folder on Google Drive), so
-another machine / a new Colab session only has to extract them. Extraction goes into a temporary folder that is
-renamed when it is complete, so an interrupted preparation never leaves a half-extracted dataset behind. A dataset
-folder that already has the expected layout is only read, never modified.
+COCO 2017 is downloaded from the official server (images.cocodataset.org). GOT-10k needs a (free) registration, so it
+is prepared from the official archives (stark_ft/got10k.py). The archives are kept in the archive folder (paths key
+`archives`, default <train_data>/_archives; on Colab a folder on Google Drive), so another machine / session only has
+to extract them. A dataset folder that already has the expected layout is only read, never modified.
 """
-import fnmatch
-import hashlib
 import os
-import re
 import shutil
-import subprocess
-import tarfile
-import zipfile
 from pathlib import Path
 
-from stark_ft.download import QUOTA_HELP, _gb, _log, download
+from stark_ft import got10k
+from stark_ft.archives import TMP_NAME, check_space, extract, uncompressed_size
+from stark_ft.download import _log, download
 
 COCO_URLS = {
     "train2017.zip": "http://images.cocodataset.org/zips/train2017.zip",
     "annotations_trainval2017.zip": "http://images.cocodataset.org/annotations/annotations_trainval2017.zip",
 }
 COCO_TRAIN_IMAGES = 118287
-GOT10K_TRAIN_SEQUENCES = 9335  # lib/train/data_specs/got10k_vot_*_split.txt index into this (sorted) list
-GOT10K_SEQ = re.compile(r"^GOT-10k_Train_\d{6}$")
-ARCHIVE_SUFFIXES = (".zip", ".tar", ".tar.gz", ".tgz")
-TMP_NAME = ".stark_prepare_tmp"
-# Members extracted from GOT-10k archives: train videos, list.txt files and archives inside archives
-GOT10K_MEMBERS = ("*GOT-10k_Train_*", "*list.txt") + tuple("*" + s for s in ARCHIVE_SUFFIXES)
-FREE_MARGIN = 2e9
 
 
-# ---------------------------------------------------------------------- layout checks (read-only)
 def coco_ready(root: Path) -> bool:
     return (root / "annotations" / "instances_train2017.json").is_file() and (root / "images" / "train2017").is_dir()
-
-
-def got10k_ready(train_dir: Path) -> bool:
-    return (train_dir / "list.txt").is_file()
-
-
-def _walk(root: Path):
-    """Returns (archives, GOT-10k train sequence folders) under root without descending into sequence folders
-    (~1.4 million image files)."""
-    archives, sequences = [], {}
-    for dirpath, dirnames, filenames in os.walk(root):
-        keep = []
-        for d in dirnames:
-            if GOT10K_SEQ.match(d) and os.path.isfile(os.path.join(dirpath, d, "groundtruth.txt")):
-                sequences.setdefault(d, Path(dirpath) / d)
-            elif d != TMP_NAME:
-                keep.append(d)
-        dirnames[:] = keep
-        archives += [Path(dirpath) / f for f in filenames if f.lower().endswith(ARCHIVE_SUFFIXES)]
-    return sorted(archives), sequences
-
-
-def _selected(name: str, members) -> bool:
-    return members is None or any(fnmatch.fnmatch(name, pattern) for pattern in members)
-
-
-def _read_error(archive: Path, err) -> RuntimeError:
-    msg = f"Cannot read {archive}: {err}"
-    if "/drive/" in str(archive):  # Google Drive mount (Colab)
-        msg += ("\nIf this is a shortcut to a file shared by someone else, Google Drive probably refuses to serve it "
-                "because the file's download quota is used up.\n" + QUOTA_HELP)
-    else:
-        msg += "\nIf it is an incomplete download, delete it and run the preparation again."
-    return RuntimeError(msg)
-
-
-def _uncompressed_size(archive: Path, members=None) -> int:
-    if archive.name.lower().endswith(".zip"):
-        try:
-            with zipfile.ZipFile(archive) as z:
-                return sum(i.file_size for i in z.infolist() if _selected(i.filename, members))
-        except (zipfile.BadZipFile, OSError) as e:
-            raise _read_error(archive, e) from None
-    return archive.stat().st_size * (1 if archive.name.lower().endswith(".tar") else 2)
-
-
-def _without_duplicates(archives):
-    """The same archive twice, e.g. your copy and a shortcut of full_data.zip on Google Drive, is used only once.
-    Zips count as the same if size, member names and CRCs match (only the zip's directory is read)."""
-    by_size = {}
-    for a in archives:
-        by_size.setdefault(a.stat().st_size, []).append(a)
-    kept, seen = [], {}
-    for a in archives:
-        key = a
-        if len(by_size[a.stat().st_size]) > 1 and a.name.lower().endswith(".zip"):
-            h = hashlib.sha1()
-            try:
-                with zipfile.ZipFile(a) as z:
-                    for i in z.infolist():
-                        h.update(f"{i.filename}\0{i.CRC}\n".encode())
-            except (zipfile.BadZipFile, OSError) as e:
-                raise _read_error(a, e) from None
-            key = (a.stat().st_size, h.hexdigest())
-        if key in seen:
-            _log(f"Skipping {a.name}: the same archive as {seen[key].name} (one of them can be removed from "
-                 f"{a.parent})")
-            continue
-        seen[key] = a
-        kept.append(a)
-    return kept
-
-
-def _check_space(where: Path, needed: int, what: str):
-    probe = where
-    while not probe.exists():
-        probe = probe.parent
-    free = shutil.disk_usage(probe).free
-    if free < needed + FREE_MARGIN:
-        raise RuntimeError(f"Not enough disk space for {what}: {_gb(needed)} needed (+{_gb(FREE_MARGIN)} margin), "
-                           f"{_gb(free)} free on {probe}. Use a machine / Colab runtime with a larger disk, or train "
-                           "on fewer datasets.")
-
-
-def extract(archive: Path, dst: Path, members=None):
-    """Extracts the archive (only the members matching the wildcard patterns `members`, if given) into dst."""
-    dst.mkdir(parents=True, exist_ok=True)
-    _log(f"Extracting {archive.name} ({_gb(archive.stat().st_size)}) ...")
-    if archive.name.lower().endswith(".zip"):
-        if members is not None:  # only patterns that are the first match of some member (unzip warns otherwise)
-            with zipfile.ZipFile(archive) as z:
-                names = z.namelist()
-            regexes, used = [re.compile(fnmatch.translate(m)) for m in members], set()
-            for name in names:
-                first = next((i for i, r in enumerate(regexes) if r.match(name)), None)
-                if first is not None:
-                    used.add(first)
-                    if len(used) == len(regexes):
-                        break
-            members = [m for i, m in enumerate(members) if i in used]
-            if not members:
-                return
-        if shutil.which("unzip"):
-            rc = subprocess.run(["unzip", "-q", "-o", str(archive), *(members or ()), "-d", str(dst)]).returncode
-            if rc not in (0, 1, 11):  # 1 = warnings only, 11 = no matching members
-                raise _read_error(archive, f"unzip failed (exit code {rc})")
-        else:
-            with zipfile.ZipFile(archive) as z:
-                z.extractall(dst, [n for n in z.namelist() if _selected(n, members)])
-    else:
-        with tarfile.open(archive) as t:
-            t.extractall(dst, [m for m in t.getmembers() if _selected(m.name, members)])
 
 
 # ---------------------------------------------------------------------- COCO
@@ -175,7 +42,7 @@ def prepare_coco(root: Path, archive_dir: Path, delete_archives=False) -> Path:
     tmp = root / TMP_NAME
     if tmp.exists():
         shutil.rmtree(tmp)
-    _check_space(root, sum(_uncompressed_size(a) for a in archives.values()), "COCO train2017")
+    check_space(root, sum(uncompressed_size(a) for a in archives.values()), "COCO train2017")
     try:
         extract(archives["annotations_trainval2017.zip"], tmp)     # -> annotations/
         extract(archives["train2017.zip"], tmp / "images")          # -> images/train2017/
@@ -192,78 +59,6 @@ def prepare_coco(root: Path, archive_dir: Path, delete_archives=False) -> Path:
             a.unlink()
     _log(f"COCO ready: {root} ({n} images)")
     return root
-
-
-# ---------------------------------------------------------------------- GOT-10k
-def prepare_got10k(train_dir: Path, archive_dir: Path, urls=(), delete_archives=False) -> Path:
-    if got10k_ready(train_dir):
-        _log(f"GOT-10k ready: {train_dir}")
-        return train_dir
-    if train_dir.exists():
-        raise RuntimeError(f"{train_dir} exists but has no list.txt (not a complete GOT-10k train folder). "
-                           "Move it away or fix it.")
-    archives = []
-    for src in urls:  # download links, or archives / folders that are used in place
-        path = Path(os.path.expanduser(str(src)))
-        if re.match(r"^(https?|ftp)://", str(src)):
-            download(str(src), archive_dir)
-        elif path.is_dir():
-            archives += _walk(path)[0]
-        elif path.is_file() and path.name.lower().endswith(ARCHIVE_SUFFIXES):
-            archives.append(path)
-        else:
-            raise FileNotFoundError(f"GOT-10k source {src!r} is neither a URL nor an existing archive / folder")
-    archives = sorted(set(archives + (_walk(archive_dir)[0] if archive_dir.is_dir() else [])))
-    if not archives:
-        archive_dir.mkdir(parents=True, exist_ok=True)  # so the folder to put the archives into exists
-        raise FileNotFoundError(
-            f"No GOT-10k archive in {archive_dir} (the folder exists now, it is empty).\n"
-            "Put the GOT-10k train archives (e.g. the official full_data.zip) into this folder and run again. "
-            "With a Google Drive link: open it in the browser -> 'Add shortcut to Drive' -> right-click the shortcut "
-            "-> 'Make a copy' -> move the copy ('Copy of full_data.zip') into this folder (docs/colab.md).\n"
-            "The links come by e-mail after a free registration at http://got-10k.aitestunion.com/downloads ; "
-            "download links or archive paths can also be given with --got10k-url (notebook: got10k_sources).")
-    archives = _without_duplicates(archives)
-    tmp = train_dir.parent / TMP_NAME
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    _check_space(tmp, sum(_uncompressed_size(a, GOT10K_MEMBERS) for a in archives), "GOT-10k")
-    try:
-        for a in archives:
-            extract(a, tmp / "extracted", GOT10K_MEMBERS)
-        # Archives inside archives (e.g. full_data.zip -> .../GOT-10k_Train_split_01.zip, ...): extract them one
-        # at a time and delete each (temporary) copy right away to limit the disk usage.
-        nested, sequences = _walk(tmp / "extracted")
-        while nested:
-            for a in nested:
-                _check_space(tmp, _uncompressed_size(a, GOT10K_MEMBERS), a.name)
-                extract(a, a.parent, GOT10K_MEMBERS)
-                a.unlink()
-            nested, sequences = _walk(tmp / "extracted")
-        if len(sequences) != GOT10K_TRAIN_SEQUENCES:
-            raise RuntimeError(f"The archives in {archive_dir} contain {len(sequences)} GOT-10k train sequences; "
-                               f"all {GOT10K_TRAIN_SEQUENCES} are needed (all train archives).")
-        out = tmp / "train"
-        out.mkdir()
-        for name, d in sequences.items():
-            os.replace(d, out / name)
-        names = sorted(sequences)
-        # The official list.txt if the archives contain it, otherwise an identical one (sorted, no trailing newline)
-        official = [Path(dp) / "list.txt" for dp, _, files in os.walk(tmp / "extracted") if "list.txt" in files]
-        official = [p for p in official if p.read_text().split() == names]
-        if official:
-            shutil.copy2(official[0], out / "list.txt")
-        else:
-            (out / "list.txt").write_text("\n".join(names))
-        os.replace(out, train_dir)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    if delete_archives:  # only the copies in the archive folder, never archives given by path
-        for a in archives:
-            if archive_dir.resolve() in a.resolve().parents:
-                a.unlink()
-    _log(f"GOT-10k ready: {train_dir} ({len(names)} sequences)")
-    return train_dir
 
 
 # ---------------------------------------------------------------------- entry point
@@ -284,6 +79,6 @@ def prepare(datasets, train_data: Path, archive_dir: Path = None, got10k_urls=()
     if "coco" in datasets:
         out["coco"] = str(prepare_coco(train_data / "coco", archive_dir / "coco", delete_archives))
     if "got10k" in datasets:
-        out["got10k"] = str(prepare_got10k(train_data / "got10k" / "train", archive_dir / "got10k", got10k_urls,
-                                           delete_archives))
+        out["got10k"] = str(got10k.prepare_split("train", train_data / "got10k", archive_dir / "got10k", got10k_urls,
+                                                 delete_archives))
     return out

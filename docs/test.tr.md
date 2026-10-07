@@ -1,12 +1,14 @@
-# Test: VOT-LT2020'de test sırasında fine-tune
+# Test: VOT-LT2020 ve GOT-10k'da test sırasında fine-tune
 
-STARK-ST, VOT-LT2020 üzerinde vot-toolkit (0.5.3) ile, sınıflandırma başlığı test sırasında fine-tune edilerek ya da
-edilmeden çalıştırılır ve COCO tarzı detection metrikleriyle değerlendirilir.
+STARK-ST, VOT-LT2020 üzerinde (vot-toolkit 0.5.3 ile) ya da bir GOT-10k bölümünde, sınıflandırma başlığı test
+sırasında fine-tune edilerek ya da edilmeden çalıştırılır ve COCO tarzı detection metrikleriyle değerlendirilir
+(GOT-10k'da ayrıca AO / SR).
 
 [English](test.md) | **Türkçe**
 
 - [Yöntem](#yöntem)
 - [Çalıştırma](#çalıştırma)
+- [Veri setleri](#veri-setleri)
 - [Sık kullanılan ayarlar](#sık-kullanılan-ayarlar)
 - [Ağırlıklar](#ağırlıklar)
 - [VOT-LT2020 dizileri](#vot-lt2020-dizileri)
@@ -21,8 +23,13 @@ edilmeden çalıştırılır ve COCO tarzı detection metrikleriyle değerlendir
 ## Yöntem
 
 STARK-ST her karede bir **güven skoru** üretir: transformer decoder çıktısına uygulanan 3 katmanlı bir MLP'nin
-(**cls_head**) sigmoid'i. Skor **template update** kararını verir (her `update_interval` karede bir, skor
-`update_conf_thr`'den büyükse) ve bu değerlendirmede tracker'ın hedefi **bulduğunu** söyleyip söylemediğini belirler.
+(**cls_head**) sigmoid'i. Skor **template update** kararını verir ve bu değerlendirmede tracker'ın hedefi
+**bulduğunu** söyleyip söylemediğini belirler.
+
+| `update_mode` | Template update (N = `update_interval`) |
+|---|---|
+| `stark` (STARK) | N, 2N, 3N, ... karelerde: o anki kare, skoru `update_conf_thr`'den büyükse. |
+| `max` | 2N, 3N, ... karelerde: son N karenin adaylar arasında en yüksek skorlu karesi. Aday: skoru `update_conf_thr`'den büyük ve bir önceki adayın kutusuyla IoU'su ≥ `update_iou_thr` (N karenin ilkinde: bir önceki karenin kutusu). Aday yoksa update yok. 1 ... N. karelerde ilk karenin template'i korunur. |
 
 Base eğitimde cls_head genel bir "hedef var / yok" kararı öğrenir. Burada her videonun başında base ağırlıklarına
 döndürülür ve o videonun hedefi için kısa süre eğitilir. Backbone, transformer ve kutu başlığı dondurulur.
@@ -41,7 +48,7 @@ kare + hedef kutusu
 |---|---|---|
 | `none` | hiçbir zaman (sade STARK-ST) | — |
 | `init` | ilk kare, `ft_epochs_init` adım | ilk karenin ground truth'u |
-| `online` | ilk kare + her template update'te `ft_epochs_online` adım | ilk kare: ground truth; sonra: tracker'ın kendi tahmini |
+| `online` | ilk kare + her template update'te, template'in alındığı karede `ft_epochs_online` adım | ilk kare: ground truth; sonra: tracker'ın kendi tahmini |
 
 | `ft_samples` | Örnekler |
 |---|---|
@@ -57,6 +64,12 @@ python -m stark_ft smoke --frames 50                                   # isteğe
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # sade STARK-ST, resmi ağırlıklar
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<koşu adı>   # stark_ft train ile eğitilmiş bir model
+# STARK'ın yalnızca GOT-10k ağırlıkları: GOT-10k val'in tamamında / GOT-10k test bölümünde / VOT-LT2020'de
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
+    --set ft_mode=none --set update_interval=200
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_test --set sequences=all \
+    --set ft_mode=none --set update_interval=200
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<deney> --score-thr 0.5             # tracking olmadan metrikleri yeniden hesaplar
 python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png
 ```
@@ -72,6 +85,25 @@ GPU'da ≈ 2 saat sürer.
   giriş noktası) hata verir; başka bir `name` ya da `--overwrite` kullanın. `eval_*` parametreleri serbestçe
   değiştirilebilir (`analyze`).
 
+## Veri setleri
+
+| `dataset` | Diziler | Nasıl çalıştırılır | Metrikler |
+|---|---|---|---|
+| `"votlt2020"` (varsayılan) | 50 VOT-LT2020 dizisi, gerektiğinde indirilir ([aşağıda](#vot-lt2020-dizileri)) | vot-toolkit, `longterm` deneyi | mAP / AP50 / AP75, F-maksimum eşik, ... ([Metrikler](#metrikler)) |
+| `"got10k_val"` | 180 GOT-10k doğrulama dizisi | GOT-10k protokolü: her dizide tek geçiş, yeniden başlatma yok (vot-toolkit olmadan; model bir kez yüklenir) | GOT-10k toolkit'iyle aynı **AO, SR0.50, SR0.75** ve yukarıdaki metrikler |
+| `"got10k_test"` | 180 GOT-10k test dizisi (yalnızca ilk karenin kutusu açıktır) | yukarıdaki gibi | yerelde yok: [GOT-10k sunucusu](http://got-10k.aitestunion.com/submit_instructions) için `got10k_submission.zip` |
+| `"got10k_train"` | 9 335 GOT-10k train dizisi | yukarıdaki gibi | val'deki gibi (`*_got10k_only` ağırlıkları bu videolarla eğitildi) |
+
+GOT-10k dizi adları `GOT-10k_Val_000001` ... şeklindedir (`sequences="all"` ya da bir liste). Bir GOT-10k bölümü ilk
+kullanıldığında, eğitim verisiyle aynı GOT-10k arşivlerinden (`<archives>/got10k/`, örn. train, val ve test'i içeren
+`full_data.zip`; bkz. [train.tr.md](train.tr.md#veri-setleri) ve [colab.tr.md](colab.tr.md#google-driveda-got-10k))
+`<train_data>/got10k/<bölüm>/` klasörüne açılır. Her dizinin sonucu tamamlandığında yazılır; yarıda kalan bir koşu
+kalan dizilerle devam eder.
+
+STARK'ın yalnızca GOT-10k ile eğitilmiş ağırlıkları `weights="official"` ile `model_config="baseline_R101_got10k_only"`
+(ST101) veya `"baseline_got10k_only"` (ST50)'dir; hem GOT-10k'da hem VOT-LT2020'de test edilebilirler. STARK GOT-10k'da
+`update_interval=200` kullandı (VOT-LT'de 100).
+
 ## Sık kullanılan ayarlar
 
 | İstediğiniz | Ayar |
@@ -81,7 +113,10 @@ GPU'da ≈ 2 saat sürer.
 | İlk karede ve her template update'te fine-tune | `ft_mode="online"` |
 | Yalnızca pozitif / pozitif + negatif örnekler | `ft_samples="pos"` / `"posneg"` |
 | Fine-tune'un gücü | `ft_lr`, `ft_epochs_init` (1. karedeki adım), `ft_epochs_online` (update başına adım) |
+| Her N karenin en iyi karesiyle template update | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
+| VOT-LT2020 yerine GOT-10k | `dataset="got10k_val"` / `"got10k_test"` / `"got10k_train"` |
+| STARK'ın yalnızca GOT-10k ağırlıkları | `model_config="baseline_R101_got10k_only"` (ST50: `"baseline_got10k_only"`) |
 | ST101 yerine STARK-ST50 | `model_config="baseline"` |
 | Bu repoyla eğitilmiş bir model | `weights="<aşama-2 koşu adı>"` (aynı `model_config`) |
 
@@ -121,13 +156,16 @@ ve/veya `--set anahtar=değer`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100_s0`. |
+| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: üretilir, örn. `st101_online_pos_lr0.0001_i15_o1_int100_s0` (`update_mode="max"` ile `max100`). |
 | `model` | `"stark_st"` | `"stark_st"` veya `"stark_s"` (skor yok; 1.0 raporlar; `ft_mode="none"` gerekir). |
 | `model_config` | `"baseline_R101"` | `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) veya `model_configs/stark_s/` altındaki YAML. |
 | `weights` | `"official"` | `"official"`, burada eğitilmiş bir aşama-2 koşusu ya da bir checkpoint dosyası / yolu (bkz. [Ağırlıklar](#ağırlıklar)). (Eski adı: `checkpoint`.) |
-| `sequences` | `"all"` | `"all"` (50 dizi) veya bir liste, örn. `["bull", "ballet"]`; eksik olanlar indirilir. |
-| `update_interval` | `100` | Her N karede bir template update denemesi; `99999` = hiç. (YAML'lardaki `TEST.UPDATE_INTERVALS` kullanılmaz.) |
+| `dataset` | `"votlt2020"` | `"votlt2020"`, `"got10k_val"`, `"got10k_test"` veya `"got10k_train"` (bkz. [Veri setleri](#veri-setleri)). |
+| `sequences` | `"all"` | `"all"` veya bir liste, örn. `["bull", "ballet"]` / `["GOT-10k_Val_000001"]`; eksik veri indirilir / açılır. |
+| `update_mode` | `"stark"` | `"stark"`: her N. kare, `"max"`: her N karenin en iyi karesi (bkz. [Yöntem](#yöntem)). |
+| `update_interval` | `100` | N; `99999` = update yok. (YAML'lardaki `TEST.UPDATE_INTERVALS` kullanılmaz.) |
 | `update_conf_thr` | `0.5` | Yalnızca skor bundan büyükse update (STARK: 0.5). |
+| `update_iou_thr` | `0.5` | Yalnızca `max`: bir önceki aday karenin kutusuyla en düşük IoU; `0` = IoU kontrolü yok. |
 | `max_template_updates` | `-1` | Dizi başına; `-1` = sınırsız. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (bkz. [Yöntem](#yöntem)). |
 | `ft_samples` | `"pos"` | `"pos"` veya `"posneg"`. |
@@ -144,7 +182,7 @@ ve/veya `--set anahtar=değer`.
 | `eval_score_thr` | `0.35` | P / R / F1 için sabit eşik (mAP'yi ve F-maksimum eşiği etkilemez). |
 | `eval_iou_thr` | `0.5` | Doğru tespit için IoU (sabit eşik ve F-maksimum araması). |
 | `eval_thr_resolution` | `100` | F-maksimum aramasındaki aday eşik sayısı (vot-toolkit: 100). |
-| `run_redetection` | `False` | VOT-LT2020 `redetection` deneyini de çalıştır (~2× süre; metriklerde kullanılmaz). |
+| `run_redetection` | `False` | VOT-LT2020 `redetection` deneyini de çalıştır (~2× süre; metriklerde kullanılmaz; yalnızca VOT). |
 | `tracker_timeout` | `300` | Model yükleme dahil tracker yanıtı başına saniye. |
 
 ## Çıktılar
@@ -159,12 +197,13 @@ ve/veya `--set anahtar=değer`.
 | `predictions/<dizi>/<dizi>_001_confidence.value`, `_time.value` | Kare başına skor ve süre |
 | `predictions/<dizi>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<dizi>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (adım başına bir satır; olasılıklar güncellemeden önce) |
-| `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`) |
+| `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): template'in alındığı kare ve skoru |
 | `plots/<dizi>/iou_conf.png` | Kareye göre IoU ve skor (gri: hedef yok; kırmızı: template update; yeşil: fine-tune; siyah: sabit eşik; mor: F-maksimum eşik) |
 | `plots/<dizi>/finetune_loss.png` | Adım başına loss ve pozitif / negatif olasılıklar |
 | `metrics/summary.txt`, `metrics.xlsx`, `metrics.json` | Özet ve dizi başına metrikler |
 | `metrics/f_curve.csv`, `f_curve.png` | Eşiğe göre P / R / F, PR eğrisi |
-| `vot_workspace/` | Deneyin kendi VOT workspace'i (ham `results/`) |
+| `vot_workspace/` | Deneyin kendi VOT workspace'i (ham `results/`; yalnızca VOT-LT2020) |
+| `got10k_submission.zip` | GOT-10k test bölümü: GOT-10k sunucusu için her dizinin `<dizi>/<dizi>_001.txt` ve `<dizi>/<dizi>_time.txt` dosyaları |
 
 Kare 0 ilk (init) karedir (VOT dosyalarında satır numarası − 1); değerlendirilmez.
 
@@ -195,6 +234,12 @@ birleştirilmiş skorlardan vot-toolkit'in `determine_thresholds` fonksiyonuyla 
 P/R kullanır), diziler üzerinden ortalanır ve F = 2PR/(P+R) ortalamalardan hesaplanır; en büyük F'yi veren eşik tüm
 diziler için kullanılır (`precision_opt / recall_opt / F_opt`). Eşik, VOT-LT raporlamasındaki gibi ground truth ile
 seçilir; tracker bu eşiği bilmez.
+
+**GOT-10k** (`got10k_val`, `got10k_train`): **AO** (ortalama örtüşme), **SR0.50** ve **SR0.75** (IoU'su 0.5 / 0.75'ten
+büyük karelerin oranı), GOT-10k toolkit'inin hesapladığı gibi: ilk kareden sonraki, hedefin göründüğü kareler
+(`cover.label` > 0), görüntüye kırpılmış kutular, tüm dizilerin tüm kareleri birlikte. `summary.txt`'nin ilk satırı ve
+`AO`, `SR50`, `SR75` sütunlarıdır (dizi başına: o dizinin kareleri). GOT-10k'da hedefin görünmediği kareler, yukarıdaki
+detection metriklerinde "hedef yok" olarak sayılır.
 
 **Diğer:** `mean_iou_visible` (hedefin göründüğü karelerde ortalama IoU); `legacy_mAP / AP50 / AP75` eski
 `coco_eval.py`'yi birebir yeniden üretir (hedefin olmadığı kareler hariç, eşiğin altındaki tahminler atılır, tam sayı

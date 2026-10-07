@@ -9,7 +9,9 @@ import threading
 import zipfile
 from pathlib import Path
 
+from stark_ft import archives as arc
 from stark_ft import download as dl
+from stark_ft import got10k
 from stark_ft.train import data as td
 
 NAMES = [f"GOT-10k_Train_{i:06d}" for i in range(1, 6)]
@@ -32,13 +34,15 @@ def _split_zip(names) -> bytes:
 def _with_small_counts(fn):
     @functools.wraps(fn)
     def wrapper():
-        saved = td.GOT10K_TRAIN_SEQUENCES, td.COCO_TRAIN_IMAGES, dict(td.COCO_URLS)
-        td.GOT10K_TRAIN_SEQUENCES, td.COCO_TRAIN_IMAGES = len(NAMES), 7
+        saved = dict(got10k.SPLITS), td.COCO_TRAIN_IMAGES, dict(td.COCO_URLS)
+        got10k.SPLITS.update(train=("Train", len(NAMES)), val=("Val", 2), test=("Test", 2))
+        td.COCO_TRAIN_IMAGES = 7
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 fn(Path(tmp))
         finally:
-            td.GOT10K_TRAIN_SEQUENCES, td.COCO_TRAIN_IMAGES = saved[:2]
+            got10k.SPLITS.update(saved[0])
+            td.COCO_TRAIN_IMAGES = saved[1]
             td.COCO_URLS.clear()
             td.COCO_URLS.update(saved[2])
     return wrapper
@@ -55,7 +59,7 @@ def test_got10k_nested_archives(tmp):
     train = Path(td.prepare(["got10k"], tmp / "data", tmp / "archives")["got10k"])
     assert sorted(p.name for p in train.iterdir() if p.is_dir()) == NAMES
     assert (train / "list.txt").read_text() == "\n".join(NAMES)
-    assert not (train.parent / td.TMP_NAME).exists() and (arch / "full_data.zip").is_file()
+    assert not (train.parent / f"{arc.TMP_NAME}_train").exists() and (arch / "full_data.zip").is_file()
     mtime = (train / "list.txt").stat().st_mtime
     td.prepare(["got10k"], tmp / "data", tmp / "archives")  # ready: nothing is touched
     assert (train / "list.txt").stat().st_mtime == mtime
@@ -69,12 +73,12 @@ def test_got10k_same_archive_twice_is_extracted_once(tmp):
     with zipfile.ZipFile(arch / "Copy of full_data.zip", "w") as z:
         z.writestr("full_data/train_data/GOT-10k_Train_split_01.zip", _split_zip(NAMES))
     (arch / "full_data.zip").write_bytes((arch / "Copy of full_data.zip").read_bytes())
-    extracted, original = [], td.extract
-    td.extract = lambda a, *args, **kw: (extracted.append(a.name), original(a, *args, **kw))[1]
+    extracted, original = [], arc.extract
+    arc.extract = lambda a, *args, **kw: (extracted.append(a.name), original(a, *args, **kw))[1]
     try:
         train = Path(td.prepare(["got10k"], tmp / "data", tmp / "archives")["got10k"])
     finally:
-        td.extract = original
+        arc.extract = original
     assert extracted[0] == "Copy of full_data.zip" and "full_data.zip" not in extracted
     assert sorted(p.name for p in train.iterdir() if p.is_dir()) == NAMES
 
@@ -90,7 +94,7 @@ def test_got10k_split_archives_and_errors(tmp):
     except RuntimeError:
         pass
     assert not (tmp / "data" / "got10k" / "train").exists()
-    assert not (tmp / "data" / "got10k" / td.TMP_NAME).exists()
+    assert not (tmp / "data" / "got10k" / f"{arc.TMP_NAME}_train").exists()
     (arch / "GOT-10k_Train_split_02.zip").write_bytes(_split_zip(NAMES[2:]))
     train = Path(td.prepare(["got10k"], tmp / "data", tmp / "archives")["got10k"])
     assert (train / "list.txt").read_text() == "\n".join(NAMES)  # generated: same format as the official one
@@ -143,16 +147,16 @@ def test_got10k_full_data_layout_and_path_sources(tmp):
         z.writestr("train/list.txt", "\n".join(NAMES))
         z.writestr("val/GOT-10k_Val_000001/00000001.jpg", b"v" * 5000)
         z.writestr("test/GOT-10k_Test_000001/00000001.jpg", b"t" * 5000)
-    assert td._uncompressed_size(src) - td._uncompressed_size(src, td.GOT10K_MEMBERS) == 10000  # val + test
+    assert arc.uncompressed_size(src) - arc.uncompressed_size(src, got10k.members("train")) == 10000  # val + test
     for no_unzip in (False, True):  # with the unzip program and with the zipfile fallback
-        which = td.shutil.which
+        which = arc.shutil.which
         if no_unzip:
-            td.shutil.which = lambda name: None
+            arc.shutil.which = lambda name: None
         try:
             data = tmp / f"data{int(no_unzip)}"
             train = Path(td.prepare(["got10k"], data, tmp / "archives", [str(src)], delete_archives=True)["got10k"])
         finally:
-            td.shutil.which = which
+            arc.shutil.which = which
         assert sorted(p.name for p in train.iterdir() if p.is_dir()) == NAMES
         assert (train / "list.txt").read_text() == "\n".join(NAMES)
         assert src.is_file()  # archives given by path are never deleted
@@ -184,6 +188,49 @@ def test_google_drive_links_and_web_pages():
         finally:
             server.shutdown()
         assert not (tmp / "dl" / dl.URL_MAP).exists() and not list((tmp / "dl").glob("page*"))
+
+
+@_with_small_counts
+def test_got10k_val_and_test_splits(tmp):
+    # The same full_data.zip also gives the val and test splits; only their members are extracted
+    arch = tmp / "archives" / "got10k"
+    arch.mkdir(parents=True)
+    val, test = ["GOT-10k_Val_000001", "GOT-10k_Val_000002"], ["GOT-10k_Test_000001", "GOT-10k_Test_000002"]
+    with zipfile.ZipFile(arch / "full_data.zip", "w") as z:
+        for n in NAMES:
+            z.writestr(f"train/{n}/groundtruth.txt", "1,2,3,4\n")
+            z.writestr(f"train/{n}/00000001.jpg", b"x" * 100)
+        for n in val:
+            z.writestr(f"val/{n}/groundtruth.txt", "1,2,3,4\n5,6,7,8\n")
+            z.writestr(f"val/{n}/cover.label", "8\n0\n")
+        for n in test:
+            z.writestr(f"test/{n}/groundtruth.txt", "1,2,3,4\n")
+        z.writestr("val/list.txt", "\n".join(val))
+    root = tmp / "data" / "got10k"
+    val_dir = got10k.prepare_split("val", root, arch)
+    assert sorted(p.name for p in val_dir.iterdir() if p.is_dir()) == val and (val_dir / "list.txt").is_file()
+    assert not (root / "train").exists() and not (root / "test").exists()  # only the requested split
+    test_dir = got10k.prepare_split("test", root, arch)
+    assert (test_dir / "list.txt").read_text() == "\n".join(test)  # generated: the archive has no test list.txt
+    assert got10k.all_sequences("val") == val
+
+
+def test_got10k_read_sequence():
+    import cv2
+    import numpy as np
+    with tempfile.TemporaryDirectory() as tmp:
+        seq = Path(tmp) / "GOT-10k_Val_000001"
+        seq.mkdir()
+        for i in range(1, 4):
+            cv2.imwrite(str(seq / f"{i:08d}.jpg"), np.zeros((20, 30, 3), np.uint8))
+        (seq / "groundtruth.txt").write_text("1,2,3,4\n2,3,4,5\n3,4,5,6\n")
+        (seq / "cover.label").write_text("8\n0\n3\n")
+        images, boxes, size, init = got10k.read_sequence(Path(tmp), seq.name)
+        assert len(images) == 3 and size == (30, 20) and init == [1, 2, 3, 4]
+        assert boxes == [[1, 2, 3, 4], None, [3, 4, 5, 6]]  # cover 0: not visible (not evaluated)
+        (seq / "cover.label").unlink()
+        (seq / "groundtruth.txt").write_text("1,2,3,4\n")  # test split: first frame only
+        assert got10k.read_sequence(Path(tmp), seq.name)[1] == [[1, 2, 3, 4], None, None]
 
 
 if __name__ == "__main__":  # without pytest: python -m tests.test_train_data

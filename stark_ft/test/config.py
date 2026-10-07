@@ -11,6 +11,7 @@ from typing import List, Optional, Union
 import yaml
 
 from stark_ft import weights as weights_mod
+from stark_ft.test import datasets
 from stark_ft.common import coerce
 from stark_ft.paths import MODEL_CONFIG_DIR, Paths
 
@@ -21,6 +22,7 @@ MODELS = {
 }
 FT_MODES = ("none", "init", "online")
 FT_SAMPLES = ("pos", "posneg")
+UPDATE_MODES = ("stark", "max")
 NO_UPDATE_INTERVAL = 99999  # conventional value meaning "no template update"
 # Parameters that only affect the analysis: changing them does not invalidate tracking results
 EVAL_ONLY_FIELDS = ("eval_score_thr", "eval_iou_thr", "eval_thr_resolution")
@@ -42,11 +44,14 @@ class ExperimentConfig:
     weights: str = "official"             # "official" (STARK's) | "<training run name>" | checkpoint file / path
 
     # ---- Data ----
-    sequences: Union[str, List[str]] = "all"  # "all" or ["bull", "ballet", ...]
+    dataset: str = "votlt2020"            # "votlt2020" | "got10k_val" | "got10k_test" | "got10k_train"
+    sequences: Union[str, List[str]] = "all"  # "all" or ["bull", "ballet", ...] / ["GOT-10k_Val_000001", ...]
 
     # ---- Template update (STARK-ST) ----
-    update_interval: int = 100            # An update is attempted every N frames; 99999 = no updates
+    update_mode: str = "stark"            # "stark": every N-th frame | "max": the best frame of every N frames
+    update_interval: int = 100            # N; 99999 = no updates
     update_conf_thr: float = 0.5          # The confidence must be GREATER than this for an update
+    update_iou_thr: float = 0.5           # "max" only: min IoU with the box of the previous candidate frame
     max_template_updates: int = -1        # Max number of updates per sequence; -1 = unlimited
 
     # ---- Fine-tuning (STARK-ST only) ----
@@ -93,6 +98,12 @@ class ExperimentConfig:
             errors.append(f"ft_samples={self.ft_samples!r}; valid: {FT_SAMPLES}")
         if self.model == "stark_s" and self.ft_mode != "none":
             errors.append("stark_s has no classification head; ft_mode must be 'none'")
+        if self.update_mode not in UPDATE_MODES:
+            errors.append(f"update_mode={self.update_mode!r}; valid: {UPDATE_MODES}")
+        elif self.model == "stark_s" and self.update_mode != "stark":
+            errors.append("stark_s has no template update; update_mode must be 'stark'")
+        if not 0 <= self.update_iou_thr <= 1:
+            errors.append("update_iou_thr must be in [0, 1]")
         if self.update_interval < 1:
             errors.append("update_interval must be >= 1 (use 99999 for no updates)")
         if self.ft_epochs_init < 0 or self.ft_epochs_online < 0:
@@ -105,6 +116,10 @@ class ExperimentConfig:
             errors.append("eval_thr_resolution must be >= 3")
         if not (self.sequences == "all" or (isinstance(self.sequences, list) and self.sequences)):
             errors.append("sequences must be 'all' or a non-empty list")
+        if self.dataset not in datasets.DATASETS:
+            errors.append(f"dataset={self.dataset!r}; valid: {list(datasets.DATASETS)}")
+        elif self.run_redetection and datasets.is_got10k(self.dataset):
+            errors.append("run_redetection is a VOT-LT2020 experiment; it is not available on GOT-10k")
         if not isinstance(self.weights, str) or not self.weights:
             errors.append("weights must be 'official', a training run name or a checkpoint file / path")
         if self.name is not None and (not self.name or any(c in self.name for c in '/\\:*?"<>| ')):
@@ -138,7 +153,8 @@ class ExperimentConfig:
     def auto_name(self) -> str:
         parts = [self.short_model_name()]
         if self.model == "stark_st":
-            interval = "noupd" if self.update_interval >= NO_UPDATE_INTERVAL else f"int{self.update_interval}"
+            interval = "noupd" if self.update_interval >= NO_UPDATE_INTERVAL else \
+                f"{'max' if self.update_mode == 'max' else 'int'}{self.update_interval}"
             if self.ft_mode == "none":
                 parts += ["base", interval]
             else:
@@ -148,12 +164,16 @@ class ExperimentConfig:
                 parts += [interval, f"s{self.seed}"]
             if self.update_conf_thr != 0.5:
                 parts.append(f"uthr{self.update_conf_thr:g}")
+            if self.update_mode == "max" and self.update_iou_thr != 0.5:
+                parts.append(f"uiou{self.update_iou_thr:g}")
             if self.max_template_updates >= 0:
                 parts.append(f"maxupd{self.max_template_updates}")
             if self.max_ft_updates >= 0 and self.ft_mode == "online":
                 parts.append(f"maxft{self.max_ft_updates}")
         else:
             parts.append("base")
+        if self.dataset != datasets.VOT:
+            parts.append(self.dataset.replace("_", "-"))  # e.g. got10k-val
         if self.sequences != "all":
             parts.append(self.sequences[0] if len(self.sequences) == 1 else f"{len(self.sequences)}seq")
         return "_".join(parts)

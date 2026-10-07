@@ -6,7 +6,7 @@ Bu repo [STARK](https://github.com/researchmm/Stark) (ICCV 2021) üzerine kurulu
 
 - STARK-ST sınıflandırma başlığının her videoda **test sırasında fine-tune edilmesi** (`init` / `online`; pozitif ya da
   pozitif + negatif örneklerle). **VOT-LT2020** üzerinde COCO tarzı detection metrikleri (mAP, AP50, AP75) ve VOT-LT
-  F-maksimum eşiğiyle değerlendirilir.
+  F-maksimum eşiğiyle, **GOT-10k**'da (val / test / train; AO, SR) değerlendirilir.
 - **STARK-ST'nin tek GPU'da eğitimi** (aşama 1 ve aşama 2): orijinal effective batch boyutuyla, GOT-10k, COCO, LaSOT
   ve TrackingNet'in herhangi bir kombinasyonuyla.
 
@@ -35,7 +35,7 @@ ${ROOT}
 └── data
     ├── votlt2020/sequences          # test (gerektiğinde indirilir)
     └── train                        # eğitim
-        ├── got10k/train
+        ├── got10k/{train, val, test}   # val / test: GOT-10k testleri
         ├── coco/{annotations, images}
         ├── lasot
         └── trackingnet
@@ -74,12 +74,17 @@ python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
 # aynısı, burada eğitilmiş ağırlıklarla
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2
+# STARK'ın yalnızca GOT-10k ağırlıkları GOT-10k doğrulama setinde (AO / SR); dataset=got10k_test: GOT-10k sunucusu için zip
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
+    --set ft_mode=none --set update_interval=200
 # deneyleri karşılaştırma
 python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_base_int100_bull
 ```
 
 `weights`: `official` (STARK'ın ağırlıkları, varsayılan), burada eğitilmiş bir aşama-2 koşusu (`python -m stark_ft weights`
-listeler) ya da bir checkpoint dosyası. Diziler otomatik indirilir (örn. `bull` 58 MB; `sequences=all`: 50 dizi, 17.6 GB).
+listeler) ya da bir checkpoint dosyası. `dataset`: `votlt2020` (varsayılan; vot-toolkit), `got10k_val`, `got10k_test`,
+`got10k_train`. VOT dizileri otomatik indirilir (örn. `bull` 58 MB; `sequences=all`: 50 dizi, 17.6 GB); GOT-10k
+bölümleri GOT-10k arşivlerinden açılır (docs/train.tr.md).
 Notebook'lar: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
 Yöntem, parametreler, çıktılar ve metrikler: [docs/test.tr.md](docs/test.tr.md).
 

@@ -84,7 +84,9 @@ python -m stark_ft prepare-train-data --datasets got10k coco [--got10k-url URL_V
   Drive dosyaları sık sık Google'ın günlük indirme sınırına takılır ("Quota exceeded"), o durumda dosyanın kendi
   Drive'ınızdaki bir kopyasını kullanın (bkz. [colab.tr.md](colab.tr.md#google-driveda-got-10k)). Yalnızca train
   videoları ve `list.txt` açılır, arşiv içindeki arşivlerden de; 9 335 videonun tamamı bulunmalıdır. Aynı arşiv iki kez
-  bulunursa (örn. kendi kopyanız ve paylaşılan dosyaya bir kısayol) yalnızca bir kez açılır.
+  bulunursa (örn. kendi kopyanız ve paylaşılan dosyaya bir kısayol) yalnızca bir kez açılır. Aynı arşivler test için
+  kullanılan GOT-10k val ve test bölümlerini de verir ([test.tr.md](test.tr.md#veri-setleri)); her bölüm yalnızca
+  kullanıldığında açılır.
 - Arşivler saklanır; başka bir makine / oturum yalnızca açma işlemini yapar. Açma işlemi geçici bir klasöre yapılır ve
   tamamlanınca yeniden adlandırılır, önce boş disk alanı kontrol edilir, beklenen yapıdaki bir veri seti klasörü
   yalnızca okunur. Zaten açılmış bir GOT-10k kopyası doğrudan kullanılabilir: `train_data`'yı

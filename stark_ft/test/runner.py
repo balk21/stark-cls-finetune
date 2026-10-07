@@ -1,5 +1,6 @@
 """
-Runs an experiment end to end: VOT workspace setup -> `vot evaluate` -> collecting results -> analysis.
+Runs an experiment end to end. VOT-LT2020: VOT workspace setup -> `vot evaluate` -> collecting results -> analysis.
+GOT-10k: the GOT-10k protocol without vot-toolkit (direct.py) -> analysis (test split: got10k_submission.zip).
 
 Output folder layout (outputs/<experiment name>/):
     experiment.json       All parameters, checkpoint/dataset paths, sequence list, timestamp
@@ -23,7 +24,7 @@ import yaml
 
 from stark_ft import weights
 from stark_ft.common import code_hash
-from stark_ft.test import vot_data
+from stark_ft.test import datasets
 from stark_ft.test.config import ExperimentConfig
 from stark_ft.paths import REPO_ROOT, Paths, get_paths
 
@@ -48,17 +49,17 @@ def _git_commit():
         return None
 
 
-def tracking_code_hash() -> str:
-    """Hash of the code that determines the tracker output."""
-    return code_hash(TRACKING_CODE, TRACKING_EXCLUDE)
+def tracking_code_hash(dataset: str = datasets.VOT) -> str:
+    """Hash of the code that determines the tracker output (GOT-10k: also the direct runner)."""
+    extra = ("stark_ft/test/direct.py", "stark_ft/got10k.py") if datasets.is_got10k(dataset) else ()
+    return code_hash(TRACKING_CODE + extra, TRACKING_EXCLUDE)
 
 
 def resolve_sequences(cfg: ExperimentConfig, paths: Paths, fetch: bool = True):
-    """The experiment's sequences. Sequences that are not in the dataset folder yet are downloaded (or restored
-    from the dataset cache) unless fetch=False."""
-    sequences = vot_data.resolve(cfg.sequences, paths.dataset)
+    """The experiment's sequences. Missing data is downloaded (VOT) or extracted (GOT-10k) unless fetch=False."""
+    sequences = datasets.resolve(cfg.dataset, cfg.sequences, paths)
     if fetch:
-        vot_data.ensure(sequences, paths.dataset, paths.dataset_cache)
+        datasets.ensure(cfg.dataset, sequences, paths)
     return sequences
 
 
@@ -168,7 +169,7 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
 
     out_dir = paths.outputs / cfg.experiment_name
     meta_path = out_dir / "experiment.json"
-    code_hash = tracking_code_hash()
+    code_hash = tracking_code_hash(cfg.dataset)
     if out_dir.exists():
         same = False
         old_code = None
@@ -191,8 +192,8 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
                 f"({old_code} -> {code_hash}).\nResuming would mix results of two code versions. "
                 "Use overwrite=True for a fresh run, or a different `name`.")
 
-    # Missing sequences are downloaded only now: after the checks above, before old results are deleted
-    vot_data.ensure(sequences, paths.dataset, paths.dataset_cache)
+    # Missing data is fetched only now: after the checks above, before old results are deleted
+    datasets.ensure(cfg.dataset, sequences, paths)
     if overwrite and out_dir.exists():
         if paths.outputs.resolve() not in out_dir.resolve().parents:
             raise RuntimeError(f"Safety check: {out_dir} is not inside the outputs folder; not deleted")
@@ -203,7 +204,7 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
         "experiment_name": cfg.experiment_name,
         "output_dir": str(out_dir),
         "checkpoint": str(checkpoint),
-        "dataset": str(paths.dataset),
+        "dataset": str(datasets.root(cfg.dataset, paths)),
         "sequences": sequences,
         "created": datetime.datetime.now().isoformat(timespec="seconds"),
         "git_commit": _git_commit(),
@@ -212,7 +213,8 @@ def prepare_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bo
     }
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
-    _write_workspace(out_dir / "vot_workspace", cfg, paths, sequences, meta_path)
+    if not datasets.is_got10k(cfg.dataset):
+        _write_workspace(out_dir / "vot_workspace", cfg, paths, sequences, meta_path)
     return out_dir
 
 
@@ -222,13 +224,16 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
     paths = paths or get_paths()
     out_dir = prepare_experiment(cfg, paths, overwrite=overwrite)
     with open(out_dir / "experiment.json") as f:
-        sequences = json.load(f)["sequences"]
+        meta = json.load(f)
+    sequences = meta["sequences"]
 
     print(f"Experiment  : {cfg.experiment_name}")
     print(f"Output      : {out_dir}")
-    print(f"Sequences   : {len(sequences)}")
+    print(f"Dataset     : {cfg.dataset} ({len(sequences)} sequences)")
     print(f"Weights     : {cfg.weights}  ({cfg.checkpoint_path(paths)})")
     print("-" * 70, flush=True)
+    if datasets.is_got10k(cfg.dataset):
+        return _run_got10k(cfg, out_dir, meta, paths, analyze)
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
@@ -253,6 +258,33 @@ def run_experiment(cfg: ExperimentConfig, paths: Paths = None, overwrite: bool =
         print("Running the same experiment again skips completed sequences and retries the missing ones.")
         _print_tracker_errors(out_dir / "vot_workspace" / "logs", since=started)
 
+    if analyze and status["complete"]:
+        from stark_ft.test.analysis import analyze_experiment
+        analyze_experiment(out_dir, paths=paths)
+    return out_dir
+
+
+def _run_got10k(cfg: ExperimentConfig, out_dir: Path, meta: dict, paths: Paths, analyze: bool) -> Path:
+    from stark_ft.test import direct
+    sequences = meta["sequences"]
+    status = direct.run_sequences(cfg, out_dir, Path(meta["dataset"]), sequences, Path(meta["checkpoint"]))
+    status["finished"] = datetime.datetime.now().isoformat(timespec="seconds")
+    with open(out_dir / "run_status.json", "w") as f:
+        json.dump(status, f, indent=2)
+    print("-" * 70)
+    print(f"Completed sequences: {len(status['complete'])}/{len(sequences)}")
+    if status["failed"]:
+        print(f"WARNING - failed sequences: {list(status['failed'])} (errors above and in run_status.json). "
+              "Running the same experiment again retries them.")
+    if cfg.dataset == "got10k_test" and len(status["complete"]) == len(sequences):
+        zip_path = direct.write_submission(out_dir, Path(meta["dataset"]), sequences)
+        print(f"Results for the GOT-10k evaluation server: {zip_path}\n"
+              "  upload it at http://got-10k.aitestunion.com/submit_instructions (the test split has no local "
+              "ground truth)")
+        total = len(datasets.resolve(cfg.dataset, "all", paths))
+        if len(sequences) < total:
+            print(f"  NOTE: it contains {len(sequences)} of the {total} test sequences; the server needs all "
+                  "(sequences='all').")
     if analyze and status["complete"]:
         from stark_ft.test.analysis import analyze_experiment
         analyze_experiment(out_dir, paths=paths)

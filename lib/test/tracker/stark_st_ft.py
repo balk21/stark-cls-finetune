@@ -3,7 +3,8 @@ STARK-ST + video-specific fine-tuning of the classification head (cls_head, a 3-
 
 Modes (params.ft_mode):
   - 'init'   : fine-tune only on the first frame (with the ground-truth box).
-  - 'online' : first frame + every frame where a template update happens (with the tracker's own predicted box).
+  - 'online' : first frame + every frame a template update takes its template from (with the tracker's own
+               predicted box; with update_mode='max' this is the selected frame of the interval).
   (In 'none' mode STARK_ST is used directly instead of this class.)
 
 Sample types (params.ft_samples):
@@ -91,7 +92,7 @@ class STARK_ST_FT(STARK_ST):
                                                                   run_cls_head=False)
         return output_embed.detach()  # (1, 1, 1, 256); gradients only flow through cls_head
 
-    def _finetune_on_frame(self, image, bbox, epochs, session):
+    def _finetune_on_frame(self, image, bbox, epochs, session, frame):
         img_h, img_w = image.shape[:2]
         if self.ft_pos_jitter:
             pos_box = jitter_box(bbox, self.rng, self.ft_center_jitter, self.ft_scale_jitter)
@@ -105,9 +106,9 @@ class STARK_ST_FT(STARK_ST):
             hs_list.append(self._get_hs(image, neg_box))
             labels.append(0.0)
 
-        self._run_finetune(hs_list, labels, epochs, session, neg_coverage)
+        self._run_finetune(hs_list, labels, epochs, session, neg_coverage, frame)
 
-    def _run_finetune(self, hs_list, labels, epochs, session, neg_coverage):
+    def _run_finetune(self, hs_list, labels, epochs, session, neg_coverage, frame):
         hs_batch = torch.cat(hs_list, dim=1)  # (1, N, 1, 256)
         labels_t = torch.tensor(labels, dtype=torch.float32, device=hs_batch.device)
         optimizer = torch.optim.AdamW(self.network.cls_head.parameters(), lr=self.ft_lr,
@@ -125,7 +126,7 @@ class STARK_ST_FT(STARK_ST):
                 probs = torch.sigmoid(logits)
                 pos_prob = probs[labels_t == 1].mean().item() if n_pos else float('nan')
                 neg_prob = probs[labels_t == 0].mean().item() if n_neg else float('nan')
-            rows.append(f"{self.frame_id},{session},{epoch},{loss.item():.8e},{pos_prob:.8f},{neg_prob:.8f},"
+            rows.append(f"{frame},{session},{epoch},{loss.item():.8e},{pos_prob:.8f},{neg_prob:.8f},"
                         f"{n_pos},{n_neg},{neg_coverage:.4f}\n")
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.network.cls_head.parameters(), max_norm=self.ft_grad_clip_norm)
@@ -153,16 +154,17 @@ class STARK_ST_FT(STARK_ST):
                 f.write(FT_LOG_HEADER)
 
         if self.ft_epochs_init > 0:
-            self._finetune_on_frame(image, info['init_bbox'], self.ft_epochs_init, session='init')
+            self._finetune_on_frame(image, info['init_bbox'], self.ft_epochs_init, session='init', frame=0)
 
     def track(self, image, info: dict = None):
         out = super().track(image, info)
         out['ft_updated'] = False
         if (self.ft_mode == 'online' and out['template_updated'] and self.ft_epochs_online > 0
                 and (self.max_ft_updates < 0 or self.ft_update_count < self.max_ft_updates)):
-            # A frame that allowed a template update is treated as reliable; the box is the tracker's own prediction.
-            self._finetune_on_frame(image, self.state, self.ft_epochs_online, session='online')
+            # The frame the new template was taken from is treated as reliable; the box is the tracker's own prediction.
+            src_frame, _, src_image, src_box = self.template_source
+            self._finetune_on_frame(src_image, src_box, self.ft_epochs_online, session='online', frame=src_frame)
             self.ft_update_count += 1
-            self.ft_frames.append(self.frame_id)
+            self.ft_frames.append(src_frame)
             out['ft_updated'] = True
         return out

@@ -137,7 +137,7 @@ def _test_params(args):
 
 def cmd_show(args):
     from stark_ft.paths import get_paths
-    from stark_ft.test import vot_data
+    from stark_ft.test import datasets
     from stark_ft.test.runner import resolve_sequences
     cfg = _test_params(args)
     paths = get_paths()
@@ -152,7 +152,7 @@ def cmd_show(args):
     }
     try:
         info["sequences"] = resolve_sequences(cfg, paths, fetch=False)
-        info["to_download"] = vot_data.missing(info["sequences"], paths.dataset)
+        info["to_fetch"] = datasets.to_fetch(cfg.dataset, info["sequences"], paths)
     except Exception as e:  # noqa: BLE001
         info["sequences_error"] = str(e)
     if args.json:
@@ -165,11 +165,10 @@ def cmd_show(args):
     print(f"              {w['path']}  ({'PROBLEM: ' + w['problem'] if w['problem'] else w.get('note', 'found')})")
     if "sequences" in info:
         seqs = info["sequences"]
+        print(f"Dataset     : {cfg.dataset}")
         print(f"Sequences   : {len(seqs)} -> {', '.join(seqs[:8])}{' ...' if len(seqs) > 8 else ''}")
-        todo = info["to_download"]
-        if todo:
-            print(f"Download    : {len(todo)} sequence(s) not on disk yet ({vot_data.size_text(todo)}), "
-                  "fetched when the run starts")
+        if info["to_fetch"]:
+            print(f"Data        : {info['to_fetch']}; fetched when the run starts")
     else:
         print(f"Sequences   : ERROR - {info['sequences_error']}")
     print("Parameters:")
@@ -189,6 +188,10 @@ def cmd_compare(args):
     fmt = lambda v: f"{v:.4f}"  # noqa: E731
     print("== Parameter differences ==")
     print(compare.load_parameters(names).to_string())
+    pooled = compare.load_summaries(names, "pooled")
+    if "AO" in pooled.columns and pooled["AO"].notna().any():
+        print("\n== GOT-10k AO / SR0.50 / SR0.75 (all frames pooled) ==")
+        print(pooled[["AO", "SR50", "SR75"]].to_string(float_format=fmt))
     print("\n== mAP / AP50 / AP75 (mean over sequences) ==")
     print(compare.load_summaries(names, "mean_over_sequences")[["mAP", "AP50", "AP75"]].to_string(float_format=fmt))
     print("\n== F-max threshold (VOT method, P/R averaged over sequences) ==")
@@ -197,9 +200,9 @@ def cmd_compare(args):
     for kind, title in (("mean_over_sequences", "Mean over sequences"), ("pooled", "Pooled (all frames)")):
         print(f"\n== {title} ==")
         df = compare.load_summaries(names, kind)
-        cols = [c for c in ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall",
-                            "F1", "absent_reject_rate", "mean_iou_visible", "legacy_mAP", "legacy_AP50",
-                            "n_sequences"] if c in df.columns]
+        cols = [c for c in ["AO", "SR50", "SR75", "mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt",
+                            "precision", "recall", "F1", "absent_reject_rate", "mean_iou_visible", "legacy_mAP",
+                            "legacy_AP50", "n_sequences"] if c in df.columns]
         print(df[cols].to_string(float_format=fmt))
     if len(names) >= 2:
         for metric in ("mAP", "AP50", "AP75"):
@@ -233,7 +236,7 @@ def main(argv=None):
     # train
     p = sub.add_parser("prepare-train-data", help="Train: download / extract training datasets (got10k, coco)")
     p.add_argument("--datasets", nargs="+", required=True, choices=["got10k", "got10k_full", "coco"])
-    p.add_argument("--archives", help="Folder for the archives (default: <train_data>/_archives)")
+    p.add_argument("--archives", help="Folder for the archives (default: the `archives` path, <train_data>/_archives)")
     p.add_argument("--got10k-url", action="append", default=[],
                    help="GOT-10k archive: download link (Google Drive share links work) or path (repeatable)")
     p.add_argument("--delete-archives", action="store_true", help="Delete the archives after extracting them")
@@ -297,7 +300,9 @@ def main(argv=None):
     if args.cmd == "prepare-train-data":
         from stark_ft.paths import get_paths
         from stark_ft.train.data import prepare
-        prepare(args.datasets, get_paths().train_data, args.archives, args.got10k_url, args.delete_archives)
+        paths = get_paths()
+        prepare(args.datasets, paths.train_data, args.archives or paths.archives, args.got10k_url,
+                args.delete_archives)
         return 0
     if args.cmd == "train":
         return cmd_train(args)

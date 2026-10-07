@@ -44,6 +44,7 @@ Drive'da 70.7 GB yer gerekir):
 3. Kopyayı `<colab_drive>/train_archives/got10k/` klasörüne taşıyın (`train.ipynb`'nin veri adımı bu klasörü
    oluşturur), kısayolu silin ve `train.ipynb`'yi `got10k_sources=[]` ile çalıştırın.
 
+Aynı arşiv, test için GOT-10k val ve test bölümlerini de verir (`dataset="got10k_val"` / `"got10k_test"`).
 Arşiv sonra Drive'dan okunur ve her oturumun başında yalnızca train videoları yerel diske açılır (≈ 74 GB, yaklaşık
 yarım saat); çünkü eğitim sırasında görüntüleri Drive'dan okumak çok daha yavaş olurdu. Hazırlık önce boş disk alanını
 kontrol eder.

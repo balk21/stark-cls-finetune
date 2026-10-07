@@ -187,6 +187,7 @@ def session(drive_root=DRIVE_ROOT, local_root=LOCAL_ROOT, mount=True, rebuild_en
              "dataset_cache": drive_root / "cache" / "votlt2019_sequences",    # copies of the sequences used: Drive
              "outputs": drive_root / "outputs",
              "train_data": local_root / "train_data",
+             "archives": drive_root / "train_archives",                         # dataset archives: Drive
              "train_outputs": drive_root / "training"}
     write_paths(**paths)
     os.environ["VOT1_PYTHON"] = str(python)  # used by nbhelper.python()

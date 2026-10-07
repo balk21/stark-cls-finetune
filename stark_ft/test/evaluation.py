@@ -113,6 +113,39 @@ def iou(a, b):
     return inter / union if union > 0 else 0.0
 
 
+def _clip_box(b, w, h):
+    x, y = min(max(b[0], 0.0), w), min(max(b[1], 0.0), h)
+    return [x, y, min(max(b[2], 0.0), w - x), min(max(b[3], 0.0), h - y)]
+
+
+def got10k_ious(gt_boxes, boxes, size):
+    """IoUs as the GOT-10k toolkit computes them (ExperimentGOT10k / rect_iou with bound): the frames after the first
+    where the target is visible, boxes clipped to the image (size = (width, height))."""
+    eps = np.finfo(float).eps
+    w, h = size
+    out = []
+    for g, p in zip(gt_boxes[1:], boxes[1:]):
+        if g is None:
+            continue
+        if p is None:
+            out.append(0.0)
+            continue
+        a, b = _clip_box(p, w, h), _clip_box(g, w, h)
+        ix = max(0.0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
+        iy = max(0.0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+        inter = ix * iy
+        out.append(min(max(inter / (a[2] * a[3] + b[2] * b[3] - inter + eps), 0.0), 1.0))
+    return np.array(out, dtype=float)
+
+
+def got10k_metrics(ious) -> dict:
+    """AO (average overlap), SR0.50 and SR0.75 (success rates) of the GOT-10k benchmark."""
+    ious = np.asarray(ious, dtype=float)
+    if not len(ious):
+        return {"AO": float("nan"), "SR50": float("nan"), "SR75": float("nan")}
+    return {"AO": float(ious.mean()), "SR50": float((ious > 0.5).mean()), "SR75": float((ious > 0.75).mean())}
+
+
 # ------------------------------------------------------------------ COCO
 def _coco_ap(images, annotations, detections):
     """images: [img_id], annotations: [(img_id, box)], detections: [(img_id, box, score)]."""

@@ -4,5 +4,6 @@ checkpoints: checkpoints              # <checkpoints>/<stark_st2|stark_s>/<model
 dataset: data/votlt2020/sequences     # test: VOT-format sequences <dataset>/<sequence>/{color/, groundtruth.txt, sequence}
 dataset_cache:                        # test, optional: keep a copy (<sequence>.tar) of every downloaded sequence here
 outputs: outputs                      # test: one folder per experiment
-train_data: data/train                # train: <train_data>/{got10k/train, coco, lasot, trackingnet}
+train_data: data/train                # <train_data>/{got10k/{train,val,test}, coco, lasot, trackingnet}
 train_outputs: outputs/training       # train: one folder per training run
+archives:                             # dataset archives (COCO, GOT-10k); empty = <train_data>/_archives

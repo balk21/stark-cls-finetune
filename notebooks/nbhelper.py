@@ -206,9 +206,7 @@ def prepare_training_data(datasets, got10k_sources=(), delete_archives=False):
     parameters. got10k_sources: GOT-10k download links or archive paths. On Colab the archives are kept on Drive."""
     if isinstance(datasets, dict):
         datasets = training_datasets(datasets)
-    args = ["prepare-train-data", "--datasets", *datasets]
-    if _COLAB:
-        args += ["--archives", _COLAB["train_archives"]]
+    args = ["prepare-train-data", "--datasets", *datasets]  # archives: the `archives` path (on Colab: Drive)
     for src in got10k_sources:
         args += ["--got10k-url", src]
     if delete_archives:

@@ -10,10 +10,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stark_ft.test import vot_data
+from stark_ft.test import datasets
 from stark_ft.test.config import ExperimentConfig
-from stark_ft.test.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, iou, operating_point,
-                                 read_groundtruth, read_vot_result)
+from stark_ft.test.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, got10k_ious,
+                                      got10k_metrics, iou, operating_point, read_vot_result)
 from stark_ft.paths import Paths, get_paths
 from stark_ft.test.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
 
@@ -22,10 +22,13 @@ SUMMARY_METRICS = ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt"
                    "absent_reject_rate", "mean_iou_visible", "legacy_mAP", "legacy_AP50", "legacy_AP75"]
 
 
-def _dataset_dir(meta: dict, paths: Paths) -> Path:
+GOT10K_METRICS = ["AO", "SR50", "SR75"]  # GOT-10k benchmark metrics (GOT-10k datasets only)
+
+
+def _dataset_dir(meta: dict, cfg: ExperimentConfig, paths: Paths) -> Path:
     """If the analysis runs on another machine the recorded path may not exist; then the current setting is used."""
     recorded = Path(meta.get("dataset", ""))
-    return recorded if recorded.is_dir() else paths.dataset
+    return recorded if recorded.is_dir() else datasets.root(cfg.dataset, paths)
 
 
 def _read_csv(path, columns):
@@ -71,11 +74,16 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
     score_thr = cfg.eval_score_thr if score_thr is None else score_thr
     iou_thr = cfg.eval_iou_thr if iou_thr is None else iou_thr
     thr_resolution = cfg.eval_thr_resolution if thr_resolution is None else thr_resolution
-    dataset = _dataset_dir(meta, paths)
+    dataset = _dataset_dir(meta, cfg, paths)
     exp_name = meta["experiment_name"]
-    # Ground truth of the sequences with results, e.g. in a new Colab session: restored from Drive or downloaded
+    # Ground truth of the sequences with results, e.g. in a new Colab session: restored / downloaded / extracted
     with_results = [s for s in meta["sequences"] if (out_dir / "predictions" / s / f"{s}_001.txt").is_file()]
-    vot_data.ensure(with_results, dataset, paths.dataset_cache)
+    datasets.ensure(cfg.dataset, with_results, paths)
+    if not datasets.has_ground_truth(cfg.dataset):
+        return _no_ground_truth(out_dir, meta, with_results, verbose)
+    is_got10k = datasets.is_got10k(cfg.dataset)
+    summary_metrics = (GOT10K_METRICS if is_got10k else []) + SUMMARY_METRICS
+    got10k_pooled = []
 
     # ---- pass 1: per-sequence metrics (fixed threshold) ----
     per_seq, all_records, seq_records, plot_data, skipped = [], [], {}, {}, []
@@ -85,7 +93,7 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         if not (pred_dir / f"{seq}_001.txt").is_file():
             skipped.append(seq)
             continue
-        gt_boxes = read_groundtruth(dataset / seq / "groundtruth.txt")
+        gt_boxes, image_size = datasets.ground_truth(cfg.dataset, dataset, seq)
         boxes, scores, times = read_vot_result(pred_dir, seq)
         if len(boxes) != len(gt_boxes):
             skipped.append(seq)
@@ -97,6 +105,10 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         frames.to_csv(pred_dir / "frames.csv", index=False, float_format="%.6f")
 
         metrics, records = evaluate_sequence(gt_boxes, boxes, scores, score_thr, iou_thr, img_id_offset=offset)
+        if is_got10k:
+            seq_ious = got10k_ious(gt_boxes, boxes, image_size)
+            got10k_pooled.append(seq_ious)
+            metrics.update(got10k_metrics(seq_ious))
         offset += len(gt_boxes) + 1
         all_records.extend(records)
         seq_records[seq] = records
@@ -112,8 +124,9 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
             plot_data[seq] = (frames, events, ft)
 
         if verbose:
-            print(f"  {seq:<14s} mAP={metrics['mAP']:.3f}  AP50={metrics['AP50']:.3f}  AP75={metrics['AP75']:.3f}  "
-                  f"|  F1={metrics['F1']:.3f} (threshold {score_thr:g})")
+            got = f"AO={metrics['AO']:.3f}  " if is_got10k else ""
+            print(f"  {seq:<14s} {got}mAP={metrics['mAP']:.3f}  AP50={metrics['AP50']:.3f}  "
+                  f"AP75={metrics['AP75']:.3f}  |  F1={metrics['F1']:.3f} (threshold {score_thr:g})")
 
     if not per_seq:
         raise RuntimeError(f"No completed sequence to analyse: {out_dir}")
@@ -128,12 +141,14 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
 
     table = pd.DataFrame(per_seq).set_index("sequence")
     mean_row = table.mean(numeric_only=True)
-    mean_over = {k: float(mean_row[k]) for k in SUMMARY_METRICS if k in mean_row}
+    mean_over = {k: float(mean_row[k]) for k in summary_metrics if k in mean_row}
     # VOT definition: F is not the mean of per-sequence F values; it is computed from the mean P and R
     mean_over["F1"] = _f_from(mean_over["precision"], mean_over["recall"])
     mean_over["F_opt"] = best["F"]
 
     pooled = {"mAP": np.nan, "AP50": np.nan, "AP75": np.nan}
+    if is_got10k:  # the official GOT-10k numbers: all frames of all sequences pooled
+        pooled.update(got10k_metrics(np.concatenate(got10k_pooled)))
     pooled.update(coco_standard(all_records))
     pooled.update(operating_point(all_records, score_thr, iou_thr))
     pooled_opt = operating_point(all_records, best["threshold"], iou_thr)
@@ -174,8 +189,8 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
 
     # ---- tables ----
     summary_df = pd.DataFrame({"mean over sequences": mean_over,
-                               "pooled": {k: summary["pooled"].get(k, np.nan) for k in SUMMARY_METRICS}})
-    summary_df = summary_df.reindex(SUMMARY_METRICS)
+                               "pooled": {k: summary["pooled"].get(k, np.nan) for k in summary_metrics}})
+    summary_df = summary_df.reindex(summary_metrics)
     params_df = pd.DataFrame(sorted(meta["config"].items()), columns=["parameter", "value"]).astype(str)
     with pd.ExcelWriter(metrics_dir / "metrics.xlsx", engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="summary")
@@ -184,10 +199,14 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         curve_df.to_excel(writer, sheet_name="f_curve", index=False)
         params_df.to_excel(writer, sheet_name="parameters", index=False)
 
-    seq_cols = ["mAP", "AP50", "AP75", "F_opt", "precision_opt", "recall_opt", "F1",
-                "absent_reject_rate", "mean_iou_visible", "absent_frames", "template_updates", "ft_updates"]
+    seq_cols = (GOT10K_METRICS if is_got10k else []) + [
+        "mAP", "AP50", "AP75", "F_opt", "precision_opt", "recall_opt", "F1",
+        "absent_reject_rate", "mean_iou_visible", "absent_frames", "template_updates", "ft_updates"]
+    got = summary["pooled"]
+    got10k_line = ([f"GOT-10k AO / SR0.50 / SR0.75 (all frames pooled, as the GOT-10k toolkit): "
+                    f"{got['AO']:.4f} / {got['SR50']:.4f} / {got['SR75']:.4f}"] if is_got10k else [])
     lines = [f"Experiment: {exp_name}",
-             f"Sequences: {len(per_seq)}  (skipped: {skipped or 'none'})",
+             f"Sequences: {len(per_seq)}  (skipped: {skipped or 'none'})", *got10k_line,
              f"mAP / AP50 / AP75 (mean over sequences): {mean_over['mAP']:.4f} / {mean_over['AP50']:.4f} / "
              f"{mean_over['AP75']:.4f}",
              f"F-max threshold (VOT method, {thr_resolution} candidates): score >= {best['threshold']:.4f}  ->  "
@@ -201,5 +220,25 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
              table[seq_cols].to_string(float_format=lambda v: f"{v:.3f}")]
     (metrics_dir / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if verbose:
-        print("\n" + "\n".join(lines[:8]))  # per-sequence lines were already printed above
+        print("\n" + "\n".join(lines[:8 + len(got10k_line)]))  # per-sequence lines were already printed above
     return {"summary": summary, "per_sequence": table, "summary_table": summary_df, "f_curve": curve_df}
+
+
+def _no_ground_truth(out_dir: Path, meta: dict, with_results, verbose: bool) -> dict:
+    """GOT-10k test split: no local ground truth; the results are scored by the GOT-10k server."""
+    zip_path = out_dir / "got10k_submission.zip"
+    times = []
+    for seq in with_results:
+        times += read_vot_result(out_dir / "predictions" / seq, seq)[2][1:]
+    lines = [f"Experiment: {meta['experiment_name']}",
+             f"Sequences with results: {len(with_results)} of {len(meta['sequences'])}",
+             f"Speed: {1.0 / np.nanmean(times):.1f} FPS" if times else "Speed: -",
+             "The GOT-10k test split has no local ground truth: AO / SR are computed by the GOT-10k server.",
+             (f"Upload {zip_path} at http://got-10k.aitestunion.com/submit_instructions" if zip_path.is_file()
+              else "got10k_submission.zip is written when all sequences have results.")]
+    metrics_dir = out_dir / "metrics"
+    metrics_dir.mkdir(exist_ok=True)
+    (metrics_dir / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if verbose:
+        print("\n" + "\n".join(lines))
+    return {"summary": None}

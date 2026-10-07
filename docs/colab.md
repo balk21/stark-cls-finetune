@@ -43,6 +43,7 @@ a shortcut works. Use your own copy instead (made inside Drive, nothing is downl
 3. Move the copy into `<colab_drive>/train_archives/got10k/` (the data step of `train.ipynb` creates this folder),
    delete the shortcut, and run `train.ipynb` with `got10k_sources=[]`.
 
+The same archive also gives the GOT-10k val and test splits for testing (`dataset="got10k_val"` / `"got10k_test"`).
 The archive is then read from Drive and only the train videos are extracted to the local disk (≈ 74 GB, about half an
 hour) at the start of every session, because reading the images from Drive during training would be far slower.
 The preparation checks the free disk space first.

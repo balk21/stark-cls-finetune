@@ -74,9 +74,9 @@ def main():
             conf = float(out["conf_score"])
             handle.report(Rectangle(x, y, w, h), conf)
             if out.get("template_updated"):
-                events.write(f"{frame_idx},template_update,{conf:.6f}\n")
+                events.write(f"{out['template_frame']},template_update,{out['template_conf']:.6f}\n")
             if out.get("ft_updated"):
-                events.write(f"{frame_idx},ft_update,{conf:.6f}\n")
+                events.write(f"{out['template_frame']},ft_update,{out['template_conf']:.6f}\n")
     handle.quit()
 
 

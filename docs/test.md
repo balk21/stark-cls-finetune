@@ -1,12 +1,13 @@
-# Test: test-time fine-tuning on VOT-LT2020
+# Test: test-time fine-tuning on VOT-LT2020 and GOT-10k
 
-STARK-ST is run on VOT-LT2020 with vot-toolkit (0.5.3), with or without test-time fine-tuning of its classification
-head, and evaluated with COCO-style detection metrics.
+STARK-ST is run on VOT-LT2020 (with vot-toolkit 0.5.3) or on a GOT-10k split, with or without test-time fine-tuning
+of its classification head, and evaluated with COCO-style detection metrics (GOT-10k: also AO / SR).
 
 **English** | [Türkçe](test.tr.md)
 
 - [Method](#method)
 - [Running](#running)
+- [Datasets](#datasets)
 - [Common settings](#common-settings)
 - [Weights](#weights)
 - [VOT-LT2020 sequences](#vot-lt2020-sequences)
@@ -21,8 +22,13 @@ head, and evaluated with COCO-style detection metrics.
 ## Method
 
 STARK-ST outputs a **confidence score** in every frame: the sigmoid of a 3-layer MLP (**cls_head**) on the
-transformer decoder output. It decides the **template update** (every `update_interval` frames, if the score is
-above `update_conf_thr`) and, in this evaluation, whether the tracker reports the target as **found**.
+transformer decoder output. It decides the **template update** and, in this evaluation, whether the tracker reports
+the target as **found**.
+
+| `update_mode` | Template update (N = `update_interval`) |
+|---|---|
+| `stark` (STARK) | At frames N, 2N, 3N, ...: the current frame, if its score is above `update_conf_thr`. |
+| `max` | At frames 2N, 3N, ...: the frame with the highest score of the last N frames, among the candidates: score above `update_conf_thr` and IoU ≥ `update_iou_thr` with the box of the previous candidate (for the first frame of the N: the box of the frame before). No candidate: no update. Frames 1 ... N keep the first frame's template. |
 
 In base training cls_head learns a generic "target present / absent" decision. Here it is reset to its base weights at
 the start of every video and briefly trained for that video's target. Backbone, transformer and box head are frozen.
@@ -41,7 +47,7 @@ frame + target box
 |---|---|---|
 | `none` | never (plain STARK-ST) | — |
 | `init` | first frame, `ft_epochs_init` steps | ground truth of the first frame |
-| `online` | first frame + `ft_epochs_online` steps at every template update | first frame: ground truth; later: the tracker's own prediction |
+| `online` | first frame + `ft_epochs_online` steps at every template update, on the frame the template is taken from | first frame: ground truth; later: the tracker's own prediction |
 
 | `ft_samples` | Samples |
 |---|---|
@@ -57,6 +63,12 @@ python -m stark_ft smoke --frames 50                                   # optiona
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # plain STARK-ST, official weights
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<run name>   # a model trained with stark_ft train
+# STARK's GOT-10k-only weights on all GOT-10k val sequences / on the GOT-10k test split / on VOT-LT2020
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
+    --set ft_mode=none --set update_interval=200
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_test --set sequences=all \
+    --set ft_mode=none --set update_interval=200
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<experiment> --score-thr 0.5        # metrics again, without tracking
 python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png
 ```
@@ -72,6 +84,25 @@ RTX 3060 laptop GPU.
   `model_configs/`, the tracker entry point), stops with an error; use another `name` or `--overwrite`.
   The `eval_*` parameters can be changed freely (`analyze`).
 
+## Datasets
+
+| `dataset` | Sequences | How it is run | Metrics |
+|---|---|---|---|
+| `"votlt2020"` (default) | the 50 VOT-LT2020 sequences, downloaded on demand ([below](#vot-lt2020-sequences)) | vot-toolkit, `longterm` experiment | mAP / AP50 / AP75, F-max threshold, ... ([Metrics](#metrics)) |
+| `"got10k_val"` | the 180 GOT-10k validation sequences | GOT-10k protocol: one pass per sequence, no restarts (without vot-toolkit; the model is loaded once) | **AO, SR0.50, SR0.75** as the GOT-10k toolkit, and the metrics above |
+| `"got10k_test"` | the 180 GOT-10k test sequences (only the first-frame box is public) | as above | none locally: `got10k_submission.zip` for the [GOT-10k server](http://got-10k.aitestunion.com/submit_instructions) |
+| `"got10k_train"` | the 9 335 GOT-10k train sequences | as above | as val (the `*_got10k_only` weights were trained on these videos) |
+
+GOT-10k sequence names are `GOT-10k_Val_000001` ... (`sequences="all"` or a list). A GOT-10k split is extracted on its
+first use from the same GOT-10k archives as the training data (`<archives>/got10k/`, e.g. `full_data.zip`, which
+contains train, val and test; see [train.md](train.md#datasets) and [colab.md](colab.md#got-10k-from-google-drive))
+into `<train_data>/got10k/<split>/`. Every sequence's result is written when it is complete, so an interrupted run
+continues with the remaining sequences.
+
+STARK's weights trained on GOT-10k only are `model_config="baseline_R101_got10k_only"` (ST101) or
+`"baseline_got10k_only"` (ST50) with `weights="official"`; they can be tested on GOT-10k and on VOT-LT2020 alike.
+STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
+
 ## Common settings
 
 | You want | Set |
@@ -81,7 +112,10 @@ RTX 3060 laptop GPU.
 | Fine-tuning on the first frame and at every template update | `ft_mode="online"` |
 | Positive samples only / positive + negative | `ft_samples="pos"` / `"posneg"` |
 | Strength of the fine-tuning | `ft_lr`, `ft_epochs_init` (steps on frame 1), `ft_epochs_online` (steps per update) |
+| Template update with the best frame of every N frames | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Sequences | `sequences=["bull", "ballet"]` or `"all"` |
+| GOT-10k instead of VOT-LT2020 | `dataset="got10k_val"` / `"got10k_test"` / `"got10k_train"` |
+| STARK's GOT-10k-only weights | `model_config="baseline_R101_got10k_only"` (ST50: `"baseline_got10k_only"`) |
 | STARK-ST50 instead of ST101 | `model_config="baseline"` |
 | A model trained with this repository | `weights="<stage-2 run name>"` (same `model_config`) |
 
@@ -120,13 +154,16 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated, e.g. `st101_online_pos_lr0.0001_i15_o1_int100_s0`. |
+| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated, e.g. `st101_online_pos_lr0.0001_i15_o1_int100_s0` (`max100` with `update_mode="max"`). |
 | `model` | `"stark_st"` | `"stark_st"` or `"stark_s"` (no score; reports 1.0; needs `ft_mode="none"`). |
 | `model_config` | `"baseline_R101"` | YAML in `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) or `model_configs/stark_s/`. |
 | `weights` | `"official"` | `"official"`, a stage-2 run trained here, or a checkpoint file / path (see [Weights](#weights)). (Earlier name: `checkpoint`.) |
-| `sequences` | `"all"` | `"all"` (50 sequences) or a list, e.g. `["bull", "ballet"]`; missing ones are downloaded. |
-| `update_interval` | `100` | Template update attempt every N frames; `99999` = never. (`TEST.UPDATE_INTERVALS` of the YAMLs is not used.) |
+| `dataset` | `"votlt2020"` | `"votlt2020"`, `"got10k_val"`, `"got10k_test"` or `"got10k_train"` (see [Datasets](#datasets)). |
+| `sequences` | `"all"` | `"all"` or a list, e.g. `["bull", "ballet"]` / `["GOT-10k_Val_000001"]`; missing data is downloaded / extracted. |
+| `update_mode` | `"stark"` | `"stark"`: every N-th frame, `"max"`: the best frame of every N frames (see [Method](#method)). |
+| `update_interval` | `100` | N; `99999` = no updates. (`TEST.UPDATE_INTERVALS` of the YAMLs is not used.) |
 | `update_conf_thr` | `0.5` | Update only if the score is greater than this (STARK: 0.5). |
+| `update_iou_thr` | `0.5` | `max` only: minimum IoU with the box of the previous candidate frame; `0` = no IoU check. |
 | `max_template_updates` | `-1` | Per sequence; `-1` = unlimited. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (see [Method](#method)). |
 | `ft_samples` | `"pos"` | `"pos"` or `"posneg"`. |
@@ -143,7 +180,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `eval_score_thr` | `0.35` | Fixed threshold for P / R / F1 (does not affect mAP or the F-max threshold). |
 | `eval_iou_thr` | `0.5` | IoU of a correct detection (fixed threshold and F-max search). |
 | `eval_thr_resolution` | `100` | Candidate thresholds in the F-max search (vot-toolkit: 100). |
-| `run_redetection` | `False` | Also run the VOT-LT2020 `redetection` experiment (~2× time; not used in the metrics). |
+| `run_redetection` | `False` | Also run the VOT-LT2020 `redetection` experiment (~2× time; not used in the metrics; VOT only). |
 | `tracker_timeout` | `300` | Seconds per tracker response, including model loading. |
 
 ## Outputs
@@ -158,12 +195,13 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `predictions/<seq>/<seq>_001_confidence.value`, `_time.value` | Score and time per frame |
 | `predictions/<seq>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<seq>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (one row per step; probabilities before the update) |
-| `tracker_logs/<seq>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`) |
+| `tracker_logs/<seq>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): the frame the template was taken from and its score |
 | `plots/<seq>/iou_conf.png` | IoU and score vs. frame (grey: target absent; red: template update; green: fine-tuning; black: fixed threshold; purple: F-max threshold) |
 | `plots/<seq>/finetune_loss.png` | Loss and positive / negative probabilities per step |
 | `metrics/summary.txt`, `metrics.xlsx`, `metrics.json` | Summary and per-sequence metrics |
 | `metrics/f_curve.csv`, `f_curve.png` | P / R / F vs. threshold, PR curve |
-| `vot_workspace/` | The experiment's own VOT workspace (raw `results/`) |
+| `vot_workspace/` | The experiment's own VOT workspace (raw `results/`; VOT-LT2020 only) |
+| `got10k_submission.zip` | GOT-10k test split: `<seq>/<seq>_001.txt` and `<seq>/<seq>_time.txt` of every sequence, for the GOT-10k server |
 
 Frame 0 is the first (init) frame (= line number − 1 in the VOT files); it is not evaluated.
 
@@ -194,6 +232,12 @@ threshold P and R are computed per sequence with the counting above (vot-toolkit
 over sequences, and F = 2PR/(P+R) of the averages; the threshold with the largest F is used for all sequences
 (`precision_opt / recall_opt / F_opt`). The threshold is chosen with the ground truth, as in VOT-LT reporting; the
 tracker does not know it.
+
+**GOT-10k** (`got10k_val`, `got10k_train`): **AO** (average overlap), **SR0.50** and **SR0.75** (fraction of frames
+with IoU above 0.5 / 0.75), computed as the GOT-10k toolkit does: the frames after the first in which the target is
+visible (`cover.label` > 0), boxes clipped to the image, all frames of all sequences pooled. They are the first line of
+`summary.txt` and the `AO`, `SR50`, `SR75` columns (per sequence: that sequence's frames). On GOT-10k the frames without
+a visible target are treated as "target absent" in the detection metrics above.
 
 **Other:** `mean_iou_visible` (mean IoU where the target is visible); `legacy_mAP / AP50 / AP75` reproduce the earlier
 `coco_eval.py` exactly (frames without the target excluded, predictions below the threshold dropped, integer

@@ -6,7 +6,7 @@ This repository builds on [STARK](https://github.com/researchmm/Stark) (ICCV 202
 
 - **Test-time fine-tuning** of the STARK-ST classification head on every video (`init` / `online`, positive or
   positive + negative samples), evaluated on **VOT-LT2020** with COCO-style detection metrics (mAP, AP50, AP75) and
-  the VOT-LT F-max threshold.
+  the VOT-LT F-max threshold, and on **GOT-10k** (val / test / train; AO, SR).
 - **Training STARK-ST on one GPU** (stage 1 and stage 2) with the original effective batch size, on any combination
   of GOT-10k, COCO, LaSOT and TrackingNet.
 
@@ -35,7 +35,7 @@ ${ROOT}
 └── data
     ├── votlt2020/sequences          # test (downloaded on demand)
     └── train                        # training
-        ├── got10k/train
+        ├── got10k/{train, val, test}   # val / test: GOT-10k tests
         ├── coco/{annotations, images}
         ├── lasot
         └── trackingnet
@@ -74,12 +74,17 @@ python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=online --set ft_samples=pos
 # the same with weights trained here
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none --set weights=st101_got10k+coco_stage2
+# STARK's GOT-10k-only weights on the GOT-10k validation set (AO / SR); dataset=got10k_test: zip for the GOT-10k server
+python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
+    --set ft_mode=none --set update_interval=200
 # compare experiments
 python -m stark_ft compare st101_base_int100_bull st101_got10k+coco_stage2_base_int100_bull
 ```
 
 `weights`: `official` (STARK's, default), a stage-2 run trained here (`python -m stark_ft weights` lists them) or a
-checkpoint file. The sequences are downloaded automatically (e.g. `bull` 58 MB; `sequences=all`: 50, 17.6 GB).
+checkpoint file. `dataset`: `votlt2020` (default; vot-toolkit), `got10k_val`, `got10k_test`, `got10k_train`. VOT
+sequences are downloaded automatically (e.g. `bull` 58 MB; `sequences=all`: 50, 17.6 GB); GOT-10k splits are extracted
+from the GOT-10k archives (docs/train.md).
 Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
 Method, parameters, outputs and metrics: [docs/test.md](docs/test.md).
 
