@@ -17,20 +17,28 @@ def list_experiments(outputs_dir=None):
     return sorted(p.name for p in outputs_dir.iterdir() if (p / "metrics" / "metrics.json").is_file())
 
 
-# Metric names used before AP@[.50:.95] was renamed to mAP (metrics.json files written by older versions)
-_RENAMED = {"AP": "mAP", "legacy_AP": "legacy_mAP"}
+AP_METRICS = ("mAP", "AP50", "AP75")
 
 
-def _renamed(d: dict) -> dict:
-    return {_RENAMED.get(k, k): v for k, v in d.items()}
+def _as_current(d: dict, earlier: bool) -> dict:
+    """metrics.json written by earlier versions: "AP" = "mAP"; their legacy_* values are this version's
+    mAP / AP50 / AP75 (the other AP values there were computed differently and are not used)."""
+    d = {{"AP": "mAP", "legacy_AP": "legacy_mAP"}.get(k, k): v for k, v in d.items()}
+    if earlier:
+        for k in AP_METRICS:
+            d[k] = d.pop(f"legacy_{k}", float("nan"))
+        d = {k: v for k, v in d.items() if not k.startswith("legacy_")}
+    return d
 
 
 def _load(name, outputs_dir):
     with open(Path(outputs_dir) / name / "metrics" / "metrics.json") as f:
         data = json.load(f)
+    mean = data["summary"]["mean_over_sequences"]
+    earlier = "legacy_mAP" in mean or "legacy_AP" in mean
     for kind in ("mean_over_sequences", "pooled"):
-        data["summary"][kind] = _renamed(data["summary"][kind])
-    data["per_sequence"] = [_renamed(r) for r in data["per_sequence"]]
+        data["summary"][kind] = _as_current(data["summary"][kind], earlier)
+    data["per_sequence"] = [_as_current(r, earlier) for r in data["per_sequence"]]
     return data
 
 

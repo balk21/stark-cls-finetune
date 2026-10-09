@@ -12,14 +12,14 @@ import pandas as pd
 
 from stark_ft.test import datasets
 from stark_ft.test.config import ExperimentConfig
-from stark_ft.test.evaluation import (coco_standard, evaluate_sequence, f_curve_from_sequences, got10k_ious,
-                                      got10k_metrics, iou, operating_point, read_vot_result)
+from stark_ft.test.evaluation import (coco_ap, evaluate_sequence, f_curve_from_sequences, got10k_ious, got10k_metrics,
+                                      iou, operating_point, read_vot_result)
 from stark_ft.paths import Paths, get_paths
 from stark_ft.test.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
 
 # Order of the summary tables: the primary metrics (mAP / AP50 / AP75) first
 SUMMARY_METRICS = ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall", "F1",
-                   "absent_reject_rate", "mean_iou_visible", "legacy_mAP", "legacy_AP50", "legacy_AP75"]
+                   "absent_reject_rate", "mean_iou_visible"]
 
 
 GOT10K_METRICS = ["AO", "SR50", "SR75"]  # GOT-10k benchmark metrics (GOT-10k datasets only)
@@ -149,7 +149,7 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
     pooled = {"mAP": np.nan, "AP50": np.nan, "AP75": np.nan}
     if is_got10k:  # the official GOT-10k numbers: all frames of all sequences pooled
         pooled.update(got10k_metrics(np.concatenate(got10k_pooled)))
-    pooled.update(coco_standard(all_records))
+    pooled.update(coco_ap(all_records, score_thr))
     pooled.update(operating_point(all_records, score_thr, iou_thr))
     pooled_opt = operating_point(all_records, best["threshold"], iou_thr)
     pooled.update({"precision_opt": pooled_opt["precision"], "recall_opt": pooled_opt["recall"],
@@ -207,8 +207,8 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
                     f"{got['AO']:.4f} / {got['SR50']:.4f} / {got['SR75']:.4f}"] if is_got10k else [])
     lines = [f"Experiment: {exp_name}",
              f"Sequences: {len(per_seq)}  (skipped: {skipped or 'none'})", *got10k_line,
-             f"mAP / AP50 / AP75 (mean over sequences): {mean_over['mAP']:.4f} / {mean_over['AP50']:.4f} / "
-             f"{mean_over['AP75']:.4f}",
+             f"mAP / AP50 / AP75 (mean over sequences, score >= {score_thr:g}): {mean_over['mAP']:.4f} / "
+             f"{mean_over['AP50']:.4f} / {mean_over['AP75']:.4f}",
              f"F-max threshold (VOT method, {thr_resolution} candidates): score >= {best['threshold']:.4f}  ->  "
              f"P={best['precision']:.4f}  R={best['recall']:.4f}  F={best['F']:.4f}",
              f"Fixed threshold: score >= {score_thr:g}  ->  P={mean_over['precision']:.4f}  R={mean_over['recall']:.4f}  "

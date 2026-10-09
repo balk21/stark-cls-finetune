@@ -196,7 +196,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `ft_scale_jitter` | `0.5` | Size × `exp(N(0,1)·0.5)` (stage 2: 0.5). |
 | `max_ft_updates` | `-1` | Online fine-tunings per sequence; `-1` = unlimited. |
 | `seed` | `0` | Same seed and parameters give exactly the same result (on the same GPU type). In the name when not 0 (`_s1`). |
-| `eval_score_thr` | `0.35` | Fixed threshold for P / R / F1 (does not affect mAP or the F-max threshold). |
+| `eval_score_thr` | `0.35` | Score threshold: mAP / AP50 / AP75 and P / R / F1 count the predictions with a score at or above it (does not affect the F-max threshold). |
 | `eval_iou_thr` | `0.5` | IoU of a correct detection (fixed threshold and F-max search). |
 | `eval_thr_resolution` | `100` | Candidate thresholds in the F-max search (vot-toolkit: 100). |
 | `run_redetection` | `False` | Also run the VOT-LT2020 `redetection` experiment (~2× time; not used in the metrics; VOT only). |
@@ -229,10 +229,10 @@ Frame 0 is the first (init) frame (= line number − 1 in the VOT files); it is 
 Detection-style: every frame is an image with (at most) one object; computed with `pycocotools`
 (`stark_ft/test/evaluation.py`). **mAP, AP50 and AP75 are the primary metrics.**
 
-**mAP / AP50 / AP75** (standard COCO): mAP = COCO's AP (`stats[0]`, IoU 0.50:0.95), AP50 / AP75 at one IoU threshold.
-All frames except the first are evaluated; frames without the target are images without annotations, so every
-prediction there is a false positive. No score threshold is applied (mAP already ranks by score). "Mean over sequences"
-averages the per-sequence values; "pooled" treats all frames as one dataset.
+**mAP / AP50 / AP75**: mAP = COCO's AP (`stats[0]`, IoU 0.50:0.95), AP50 / AP75 at one IoU threshold. The frames
+after the first in which the target is visible are evaluated; predictions with a score below `eval_score_thr` are not
+counted; boxes are rounded to integers. "Mean over sequences" averages the per-sequence values; "pooled" treats all
+frames as one dataset.
 
 **Fixed threshold** (`eval_score_thr`): the tracker "claims the target" if score ≥ threshold.
 
@@ -258,9 +258,7 @@ visible (`cover.label` > 0), boxes clipped to the image, all frames of all seque
 `summary.txt` and the `AO`, `SR50`, `SR75` columns (per sequence: that sequence's frames). On GOT-10k the frames without
 a visible target are treated as "target absent" in the detection metrics above.
 
-**Other:** `mean_iou_visible` (mean IoU where the target is visible); `legacy_mAP / AP50 / AP75` reproduce the earlier
-`coco_eval.py` exactly (frames without the target excluded, predictions below the threshold dropped, integer
-coordinates) for comparison with old results only.
+**Other:** `mean_iou_visible` (mean IoU where the target is visible).
 
 ## Limitations
 
@@ -279,9 +277,9 @@ coordinates) for comparison with old results only.
 Results are bit-identical only on the **same GPU type**. GPUs use different numerical kernels, and Ampere and newer
 GPUs (RTX 3000/4000, A100, L4) compute convolutions in TF32 by default while e.g. a T4 uses FP32. Tracking feeds
 every frame into the next, so tiny differences can grow. Example (`bull`, online, pos, 15+15 steps, lr 1e-5,
-interval 100; legacy mAP):
+interval 100):
 
-| Run | legacy mAP |
+| Run | mAP |
 |---|---|
 | RTX 3060 (TF32, default), 8 seeds | 0.521 ± 0.001 |
 | RTX 3060, TF32 off (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
@@ -300,12 +298,11 @@ the same GPU type and report it.**
 | 2 | The negative region was shifted by `2·max(w,h)`; for aspect ratios below ≈ 1.56 the negative crop contained the target | Shift computed from the crop size; tested on 20 000 random cases |
 | 3 | The full ground truth of the test sequence was passed to the tracker (test label leakage) | Removed; the tracker only sees the first-frame box |
 | 4 | No fixed seed | `seed`; exactly reproducible |
-| 5 | `coco_eval.py` excluded frames without the target and thresholded before mAP | Standard COCO + fixed threshold + F-max threshold; old computation kept as `legacy_*` |
-| 6 | Images were converted to tensors via `tolist()` (slow) | Original STARK version |
-| 7 | The `redetection` experiment always ran (~2× time) | Only `longterm` by default |
-| 8 | Hard-coded paths of the development machine | No hard-coded paths; one VOT workspace per experiment |
-| 9 | ImageNet weights downloaded at every start | Skipped |
-| 10 | One entry file per parameter combination (~40) | One entry point (`ExperimentConfig` + `vot_entry.py`) |
+| 5 | Images were converted to tensors via `tolist()` (slow) | Original STARK version |
+| 6 | The `redetection` experiment always ran (~2× time) | Only `longterm` by default |
+| 7 | Hard-coded paths of the development machine | No hard-coded paths; one VOT workspace per experiment |
+| 8 | ImageNet weights downloaded at every start | Skipped |
+| 9 | One entry file per parameter combination (~40) | One entry point (`ExperimentConfig` + `vot_entry.py`) |
 
 With `ft_mode="none"` the output is bit-identical to the original `STARK_ST` (150 frames, same checkpoint).
 

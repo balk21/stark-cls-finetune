@@ -198,7 +198,7 @@ ve/veya `--set anahtar=değer`.
 | `ft_scale_jitter` | `0.5` | Boyut × `exp(N(0,1)·0.5)` (aşama 2: 0.5). |
 | `max_ft_updates` | `-1` | Dizi başına online fine-tune sayısı; `-1` = sınırsız. |
 | `seed` | `0` | Aynı seed ve parametreler birebir aynı sonucu verir (aynı GPU tipinde). 0 değilse adda yer alır (`_s1`). |
-| `eval_score_thr` | `0.35` | P / R / F1 için sabit eşik (mAP'yi ve F-maksimum eşiği etkilemez). |
+| `eval_score_thr` | `0.35` | Skor eşiği: mAP / AP50 / AP75 ve P / R / F1 skoru bu değer ve üstündeki tahminleri sayar (F-maksimum eşiği etkilemez). |
 | `eval_iou_thr` | `0.5` | Doğru tespit için IoU (sabit eşik ve F-maksimum araması). |
 | `eval_thr_resolution` | `100` | F-maksimum aramasındaki aday eşik sayısı (vot-toolkit: 100). |
 | `run_redetection` | `False` | VOT-LT2020 `redetection` deneyini de çalıştır (~2× süre; metriklerde kullanılmaz; yalnızca VOT). |
@@ -231,10 +231,10 @@ Kare 0 ilk (init) karedir (VOT dosyalarında satır numarası − 1); değerlend
 Detection tarzı: her kare (en fazla) tek nesneli bir görüntüdür; `pycocotools` ile hesaplanır
 (`stark_ft/test/evaluation.py`). **Birincil metrikler mAP, AP50 ve AP75'tir.**
 
-**mAP / AP50 / AP75** (standart COCO): mAP = COCO'nun AP'si (`stats[0]`, IoU 0.50:0.95), AP50 / AP75 tek IoU eşiğinde.
-İlk kare hariç tüm kareler değerlendirilir; hedefin olmadığı kareler anotasyonsuz görüntülerdir, yani oradaki her
-tahmin false positive'dir. Skor eşiği uygulanmaz (mAP zaten skor sıralamasını ölçer). "Diziler üzerinden ortalama" dizi
-başına değerlerin ortalamasıdır; "pooled" tüm kareleri tek bir veri seti sayar.
+**mAP / AP50 / AP75**: mAP = COCO'nun AP'si (`stats[0]`, IoU 0.50:0.95), AP50 / AP75 tek IoU eşiğinde. İlk kareden
+sonraki, hedefin göründüğü kareler değerlendirilir; skoru `eval_score_thr`'nin altındaki tahminler sayılmaz; kutular tam
+sayıya yuvarlanır. "Diziler üzerinden ortalama" dizi başına değerlerin ortalamasıdır; "pooled" tüm kareleri tek bir
+veri seti sayar.
 
 **Sabit eşik** (`eval_score_thr`): skor ≥ eşik ise tracker "hedefi buldum" der.
 
@@ -260,9 +260,7 @@ büyük karelerin oranı), GOT-10k toolkit'inin hesapladığı gibi: ilk kareden
 `AO`, `SR50`, `SR75` sütunlarıdır (dizi başına: o dizinin kareleri). GOT-10k'da hedefin görünmediği kareler, yukarıdaki
 detection metriklerinde "hedef yok" olarak sayılır.
 
-**Diğer:** `mean_iou_visible` (hedefin göründüğü karelerde ortalama IoU); `legacy_mAP / AP50 / AP75` eski
-`coco_eval.py`'yi birebir yeniden üretir (hedefin olmadığı kareler hariç, eşiğin altındaki tahminler atılır, tam sayı
-koordinatlar); yalnızca eski sonuçlarla karşılaştırma içindir.
+**Diğer:** `mean_iou_visible` (hedefin göründüğü karelerde ortalama IoU).
 
 ## Sınırlamalar
 
@@ -281,9 +279,9 @@ koordinatlar); yalnızca eski sonuçlarla karşılaştırma içindir.
 Sonuçlar yalnızca **aynı GPU tipinde** bit düzeyinde aynıdır. GPU'lar farklı sayısal çekirdekler kullanır; ayrıca Ampere
 ve sonrası GPU'lar (RTX 3000/4000, A100, L4) konvolüsyonları varsayılan olarak TF32 ile hesaplar, örn. T4 ise FP32
 kullanır. Tracking her kareyi bir sonrakine aktardığı için küçük farklar büyüyebilir. Örnek (`bull`, online, pos,
-15+15 adım, lr 1e-5, interval 100; legacy mAP):
+15+15 adım, lr 1e-5, interval 100):
 
-| Koşu | legacy mAP |
+| Koşu | mAP |
 |---|---|
 | RTX 3060 (TF32, varsayılan), 8 seed | 0.521 ± 0.001 |
 | RTX 3060, TF32 kapalı (`NVIDIA_TF32_OVERRIDE=0`) | 0.458 |
@@ -302,12 +300,11 @@ aynı GPU tipinde çalıştırın ve GPU'yu raporlayın.**
 | 2 | Negatif bölge `2·max(w,h)` kaydırılıyordu; en-boy oranı ≈ 1.56'nın altındaki hedeflerde negatif kırpma hedefi içeriyordu | Kaydırma kırpma boyutundan hesaplanır; 20 000 rastgele durumda test edildi |
 | 3 | Test dizisinin tüm ground truth'u tracker'a veriliyordu (test etiketi sızıntısı) | Kaldırıldı; tracker yalnızca ilk karenin kutusunu görür |
 | 4 | Sabit seed yoktu | `seed`; birebir tekrarlanabilir |
-| 5 | `coco_eval.py` hedefin olmadığı kareleri dışarıda bırakıyor ve mAP'den önce eşik uyguluyordu | Standart COCO + sabit eşik + F-maksimum eşik; eski hesap `legacy_*` olarak duruyor |
-| 6 | Görüntüler `tolist()` ile tensöre çevriliyordu (yavaş) | Orijinal STARK sürümü |
-| 7 | `redetection` deneyi her zaman çalışıyordu (~2× süre) | Varsayılan olarak yalnızca `longterm` |
-| 8 | Geliştirme makinesine özel sabit yollar | Sabit yol yok; deney başına bir VOT workspace |
-| 9 | ImageNet ağırlıkları her başlatmada indiriliyordu | Atlanır |
-| 10 | Her parametre kombinasyonu için ayrı giriş dosyası (~40) | Tek giriş noktası (`ExperimentConfig` + `vot_entry.py`) |
+| 5 | Görüntüler `tolist()` ile tensöre çevriliyordu (yavaş) | Orijinal STARK sürümü |
+| 6 | `redetection` deneyi her zaman çalışıyordu (~2× süre) | Varsayılan olarak yalnızca `longterm` |
+| 7 | Geliştirme makinesine özel sabit yollar | Sabit yol yok; deney başına bir VOT workspace |
+| 8 | ImageNet ağırlıkları her başlatmada indiriliyordu | Atlanır |
+| 9 | Her parametre kombinasyonu için ayrı giriş dosyası (~40) | Tek giriş noktası (`ExperimentConfig` + `vot_entry.py`) |
 
 `ft_mode="none"` ile çıktı orijinal `STARK_ST` ile bit düzeyinde aynıdır (150 kare, aynı checkpoint).
 

@@ -2,15 +2,12 @@
 Detection-style evaluation (every frame = one "image", the target = a single object).
 
 Metric families:
-  1. COCO mAP / AP50 / AP75 (pycocotools, standard usage) — the primary metrics
+  1. COCO mAP / AP50 / AP75 (pycocotools) — the primary metrics
        - mAP is COCO's main "AP": precision averaged over recall and over the IoU thresholds
          0.50:0.05:0.95. AP50 / AP75 use a single IoU threshold (0.50 / 0.75).
-       - ALL frames except the first (init) frame are evaluated.
-       - Frames where the target is not visible (GT = NaN) are added as images without annotations;
-         every prediction on those frames counts as a false positive.
-       - NO score threshold is applied; all predictions are given with their scores (AP already sweeps
-         all thresholds).
-       - Coordinates are used as floats.
+       - The frames after the first (init) frame in which the target is visible are evaluated.
+       - Predictions with a score below the score threshold (eval_score_thr) are not counted.
+       - Coordinates are rounded to integers.
   2. "Found / not found" metrics at a fixed threshold (eval_score_thr, eval_iou_thr):
        the tracker "claims the target" when score >= threshold.
          target visible + claimed + IoU >= iou_thr  -> TP
@@ -19,10 +16,7 @@ Metric families:
          target absent  + claimed                   -> FP
          target absent  + not claimed               -> TN
        Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1.
-  3. Legacy COCO: EXACTLY the behaviour of the old testler/detailed_analysis/coco_eval.py
-       (frames without the target are excluded, predictions below the threshold are dropped,
-       coordinates are rounded to integers). Only for comparison with old results.
-  4. The threshold that maximises F (VOT-LT protocol, same method as vot-toolkit 0.5.3 vot/analysis/tpr.py):
+  3. The threshold that maximises F (VOT-LT protocol, same method as vot-toolkit 0.5.3 vot/analysis/tpr.py):
        - Candidate thresholds: the scores of all sequences are pooled and `resolution` thresholds are picked
          with determine_thresholds() (98 evenly spaced scores + inf and -inf).
        - P and R are computed per sequence at every threshold. The ONLY difference from vot-toolkit: P/R are
@@ -176,38 +170,22 @@ def _coco_ap(images, annotations, detections):
     return {"mAP": float(ev.stats[0]), "AP50": float(ev.stats[1]), "AP75": float(ev.stats[2])}
 
 
-def coco_standard(records):
-    """records: [(img_id, gt_box|None, pred_box|None, score)]; init frames must already be excluded."""
-    images = [r[0] for r in records]
-    anns = [(r[0], r[1]) for r in records if r[1] is not None]
-    dets = [(r[0], r[2], r[3]) for r in records if r[2] is not None and np.isfinite(r[3])]
-    return _coco_ap(images, anns, dets)
-
-
-def coco_legacy(gt_boxes, pred_boxes, scores, score_thr):
-    """Exactly the same computation as the old coco_eval.py (for one sequence)."""
-    def legacy_round(b):
-        # parse_box already drops NaN and w/h <= 0 boxes (same as the old parse_bbox_line); the old code then rounds
+def coco_ap(records, score_thr):
+    """mAP / AP50 / AP75. records: [(img_id, gt_box|None, pred_box|None, score)]; init frames already excluded.
+    Frames without the target are not evaluated, predictions with score < score_thr are not counted (a missing
+    score counts as 1), boxes are rounded to integers."""
+    def rounded(b):  # parse_box has already dropped NaN and w/h <= 0 boxes
         return None if b is None else [int(round(v)) for v in b]
 
     images, anns, dets = [], [], []
-    for idx in range(1, len(gt_boxes)):
-        g = legacy_round(gt_boxes[idx])
+    for img_id, g, p, s in records:
         if g is None:
-            continue  # old code: frames without the target are excluded entirely
-        images.append(idx)
-        anns.append((idx, g))
-        if idx >= len(pred_boxes):
             continue
-        p = legacy_round(pred_boxes[idx])
-        if p is None:
-            continue
-        s = scores[idx] if idx < len(scores) and np.isfinite(scores[idx]) else 1.0
-        if s < score_thr:
-            continue  # old code: predictions below the threshold are dropped
-        dets.append((idx, p, s))
-    if not images:
-        return {"mAP": float("nan"), "AP50": float("nan"), "AP75": float("nan")}
+        images.append(img_id)
+        anns.append((img_id, rounded(g)))
+        s = s if np.isfinite(s) else 1.0
+        if p is not None and s >= score_thr:
+            dets.append((img_id, rounded(p), s))
     return _coco_ap(images, anns, dets)
 
 
@@ -300,8 +278,6 @@ def evaluate_sequence(gt_boxes, pred_boxes, scores, score_thr, iou_thr, img_id_o
         "absent_frames": sum(1 for r in records if r[1] is None),
         "mean_iou_visible": float(np.mean(visible_ious)) if visible_ious else float("nan"),
     }
-    metrics.update(coco_standard(records))
+    metrics.update(coco_ap(records, score_thr))
     metrics.update(operating_point(records, score_thr, iou_thr))
-    legacy = coco_legacy(gt_boxes, pred_boxes, scores, score_thr)
-    metrics.update({f"legacy_{k}": v for k, v in legacy.items()})
     return metrics, records

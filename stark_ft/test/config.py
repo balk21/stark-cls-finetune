@@ -75,7 +75,7 @@ class ExperimentConfig:
     seed: int = 0
 
     # ---- Evaluation ----
-    eval_score_thr: float = 0.35          # Fixed confidence threshold for the "found" decision (P/R/F1)
+    eval_score_thr: float = 0.35          # Score threshold: mAP / AP50 / AP75 and P/R/F1 count predictions above it
     eval_iou_thr: float = 0.5             # Minimum IoU for a correct detection (P/R/F1)
     eval_thr_resolution: int = 100        # Number of candidate thresholds in the F-max search (vot-toolkit: 100)
 

@@ -202,8 +202,8 @@ def cmd_compare(args):
         print(f"\n== {title} ==")
         df = compare.load_summaries(names, kind)
         cols = [c for c in ["AO", "SR50", "SR75", "mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt",
-                            "precision", "recall", "F1", "absent_reject_rate", "mean_iou_visible", "legacy_mAP",
-                            "legacy_AP50", "n_sequences"] if c in df.columns]
+                            "precision", "recall", "F1", "absent_reject_rate", "mean_iou_visible",
+                            "n_sequences"] if c in df.columns]
         print(df[cols].to_string(float_format=fmt))
     if len(names) >= 2:
         for metric in ("mAP", "AP50", "AP75"):

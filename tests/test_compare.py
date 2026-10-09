@@ -8,10 +8,11 @@ import openpyxl
 from stark_ft.test.compare import export_comparison
 
 
-def _experiment(outputs, name, m, old_names=False):
+def _experiment(outputs, name, m, earlier=False):
     summary = {"mAP": m, "AP50": m + 0.1, "AP75": m - 0.1, "F_opt": 0.5}
-    if old_names:  # metrics.json of older versions: "AP" instead of "mAP"
-        summary["AP"] = summary.pop("mAP")
+    if earlier:  # metrics.json of earlier versions: these values as legacy_*, other AP values under the plain names
+        summary = {"AP": 0.9, "AP50": 0.9, "AP75": 0.9, "F_opt": 0.5,
+                   "legacy_AP": m, "legacy_AP50": m + 0.1, "legacy_AP75": m - 0.1}
     d = outputs / name / "metrics"
     d.mkdir(parents=True)
     (d / "metrics.json").write_text(json.dumps({
