@@ -70,8 +70,14 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
     --set ft_mode=none --set update_interval=200
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<experiment> --score-thr 0.5        # metrics again, without tracking
-python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png  # xlsx: mAP / AP50 / AP75 per experiment
+python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png  # xlsx: see below
 ```
+
+`comparison.xlsx`: sheet `summary` with one row per experiment (in the given order): `experiment`, `lr`, `epoch`
+(fine-tuning steps on the first frame + at every template update: `15+15` online, `15+0` init, `0+0` none), `sequence`,
+`method` (`orj` = STARK's template update, `max`, `noupd`), `mAP`, `AP50`, `AP75`. If the experiments have several
+sequences, every experiment also gets its own sheet with one row per sequence and the plain (not frame-weighted) mean
+in the last row; the `summary` row shows that mean.
 
 Notebooks: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. All 50 sequences (≈ 215 k frames) take ≈ 2 h on an
 RTX 3060 laptop GPU.

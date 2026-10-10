@@ -2,11 +2,15 @@
 Comparing the metrics of several experiments.
 """
 import json
+import math
+from dataclasses import fields
 from pathlib import Path
 
 import pandas as pd
+from openpyxl.styles import Font
 
 from stark_ft.paths import get_paths
+from stark_ft.test.config import NO_UPDATE_INTERVAL, ExperimentConfig
 
 
 def list_experiments(outputs_dir=None):
@@ -71,20 +75,69 @@ def per_sequence(names, metric="mAP", outputs_dir=None) -> pd.DataFrame:
     return pd.DataFrame(cols)
 
 
-EXCEL_METRICS = ["mAP", "AP50", "AP75"]
+EXCEL_COLUMNS = ["experiment", "lr", "epoch", "sequence", "method", *AP_METRICS]
+
+
+def _settings(config: dict):
+    """(lr, epoch, method) of an experiment for the Excel rows. epoch = fine-tuning steps on the first frame + at
+    every template update (15+15 online, 15+0 init, 0+0 without fine-tuning); method = template update rule."""
+    c = {f.name: f.default for f in fields(ExperimentConfig)}
+    c.update(config)
+    ft = c["ft_mode"] if c["model"] == "stark_st" else "none"
+    lr = "-" if ft == "none" else f"{c['ft_lr']:g}"
+    epoch = {"none": "0+0", "init": f"{c['ft_epochs_init']}+0"}.get(ft, f"{c['ft_epochs_init']}+{c['ft_epochs_online']}")
+    if c["model"] != "stark_st":
+        method = "-"  # STARK-S: no template update
+    elif c["update_interval"] >= NO_UPDATE_INTERVAL:
+        method = "noupd"
+    else:
+        method = {"stark": "orj", "max": "max"}[c["update_mode"]]
+    return lr, epoch, method
+
+
+def _sheet_name(i, lr, epoch, method):
+    return f"{i} {method}" + (f" lr{lr}" if lr != "-" else "") + f" {epoch}"  # at most 31 characters
+
+
+def _write(writer, sheet_name, table, mean_row=False):
+    table.to_excel(writer, sheet_name=sheet_name, index=False)
+    sheet = writer.sheets[sheet_name]
+    for col, name in enumerate(table.columns, 1):
+        width = max(len(str(v)) for v in [name, *table[name].tolist()]) + 2
+        sheet.column_dimensions[sheet.cell(row=1, column=col).column_letter].width = min(width, 60)
+        if name in AP_METRICS:
+            for row in range(2, len(table) + 2):
+                sheet.cell(row=row, column=col).number_format = "0.0000"
+    if mean_row:
+        for cell in sheet[len(table) + 1]:
+            cell.font = Font(bold=True)
 
 
 def export_comparison(names, out_path, outputs_dir=None):
-    """Excel with one row per experiment (in the given order): mAP, AP50, AP75 (mean over sequences)."""
+    """Excel. Sheet "summary": one row per experiment (in the given order) with lr, epoch, sequence, method and
+    mAP / AP50 / AP75 (for several sequences: their plain mean). If an experiment has several sequences, every
+    experiment also gets its own sheet with one row per sequence and the plain (not frame-weighted) mean as the last
+    row."""
+    outputs_dir = Path(outputs_dir) if outputs_dir else get_paths().outputs
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    table = load_summaries(names, "mean_over_sequences", outputs_dir)[EXCEL_METRICS].astype(float)
-    table.index.name = "experiment"
+    summary, per_experiment = [], []
+    for i, name in enumerate(names, 1):
+        data = _load(name, outputs_dir)
+        lr, epoch, method = _settings(data["config"])
+        rows = pd.DataFrame([{"experiment": name, "lr": lr, "epoch": epoch, "sequence": r["sequence"],
+                              "method": method, **{k: r.get(k, math.nan) for k in AP_METRICS}}
+                             for r in data["per_sequence"]], columns=EXCEL_COLUMNS)
+        mean = rows[list(AP_METRICS)].astype(float).mean()  # plain mean over the sequences
+        sequence = rows["sequence"].iloc[0] if len(rows) == 1 else f"{len(rows)} sequences"
+        summary.append({"experiment": name, "lr": lr, "epoch": epoch, "sequence": sequence, "method": method,
+                        **mean.to_dict()})
+        mean_row = {**{c: "" for c in EXCEL_COLUMNS}, "sequence": "mean", **mean.to_dict()}
+        per_experiment.append((_sheet_name(i, lr, epoch, method), pd.concat([rows, pd.DataFrame([mean_row])],
+                                                                             ignore_index=True)))
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        table.to_excel(writer, sheet_name="results")
-        sheet = writer.sheets["results"]
-        sheet.column_dimensions["A"].width = max(len(n) for n in [table.index.name, *names]) + 2
-        for row in sheet.iter_rows(min_row=2, min_col=2):
-            for cell in row:
-                cell.number_format = "0.0000"
+        _write(writer, "summary", pd.DataFrame(summary, columns=EXCEL_COLUMNS))
+        if any(len(t) > 2 for _, t in per_experiment):  # some experiment has several sequences
+            for sheet_name, table in per_experiment:
+                _write(writer, sheet_name, table, mean_row=True)
     return out_path

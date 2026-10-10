@@ -275,7 +275,8 @@ def main(argv=None):
     sub.add_parser("list", help="Test: list analysed experiments")
     p = sub.add_parser("compare", help="Test: compare experiments")
     p.add_argument("names", nargs="+")
-    p.add_argument("--out", help="Excel output (.xlsx): mAP / AP50 / AP75, one row per experiment")
+    p.add_argument("--out", help="Excel output (.xlsx): lr, epoch, sequence, method, mAP / AP50 / AP75 per experiment "
+                                 "(several sequences: also one sheet per experiment with their mean)")
     p.add_argument("--plot", help="Bar chart (.png)")
     args = parser.parse_args(argv)
 
