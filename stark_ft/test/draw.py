@@ -2,7 +2,7 @@
 Draws the boxes of a test experiment on the frames of a sequence: ground truth green, prediction red (1 pixel), and
 in the top-left corner the frame number, the IoU and the confidence score.
 
-    <experiment>/boxes/<sequence>/<sequence>_<frame>.png   the chosen frames (lossless: the 1-pixel lines stay sharp)
+    <experiment>/boxes/<sequence>/<sequence>_<frame>.jpg   the chosen frames, or every frame (frames="all")
     <experiment>/boxes/<sequence>/<sequence>.mp4            every frame (H.264 if ffmpeg is installed, e.g. Colab)
 
 Frame numbers as everywhere in the outputs: 0 = first frame (initialisation, ground-truth box), not evaluated.
@@ -24,6 +24,9 @@ from stark_ft.test.evaluation import iou, read_vot_result
 
 GT_COLOR = (0, 255, 0)    # BGR: green
 PRED_COLOR = (0, 0, 255)  # BGR: red
+# JPEG without chroma subsampling (4:4:4): the 1-pixel coloured lines keep their colour (with the default 4:2:0
+# they fade), at about a quarter of the size of PNG
+JPEG_PARAMS = [cv2.IMWRITE_JPEG_QUALITY, 95, cv2.IMWRITE_JPEG_SAMPLING_FACTOR, cv2.IMWRITE_JPEG_SAMPLING_FACTOR_444]
 
 
 def _rect(image, box, color):
@@ -70,8 +73,8 @@ def _h264(path: Path):
 
 
 def draw_sequence(exp_dir, sequence: str, frames=(), video: bool = True, fps: int = 30, paths: Paths = None) -> dict:
-    """Writes the chosen frames (and, with video=True, a video of every frame) with the boxes drawn.
-    Returns {"images": [paths of the frames], "video": path or None}."""
+    """Writes the chosen frames (frames="all": every frame) and, with video=True, a video of every frame with the
+    boxes drawn. Returns {"images": [paths of the frames], "video": path or None}."""
     exp_dir = Path(exp_dir)
     paths = paths or get_paths()
     meta = json.loads((exp_dir / "experiment.json").read_text())
@@ -91,19 +94,20 @@ def draw_sequence(exp_dir, sequence: str, frames=(), video: bool = True, fps: in
 
     out_dir = exp_dir / "boxes" / sequence
     out_dir.mkdir(parents=True, exist_ok=True)
-    wanted = sorted({int(f) for f in frames})
+    wanted = list(range(len(images))) if frames == "all" else sorted({int(f) for f in frames})
     bad = [f for f in wanted if not 0 <= f < len(images)]
     if bad:
         raise ValueError(f"frames {bad} out of range: {sequence} has frames 0 ... {len(images) - 1}")
     result = {"images": [], "video": None}
     writer = None
     todo = range(len(images)) if video else wanted
+    wanted = set(wanted)
     for i in todo:
         image = cv2.imread(str(images[i]))
         annotate(image, i, gt[i] if i < len(gt) else None, boxes[i], scores[i])
         if i in wanted:
-            path = out_dir / f"{sequence}_{i:06d}.png"
-            cv2.imwrite(str(path), image)
+            path = out_dir / f"{sequence}_{i:06d}.jpg"
+            cv2.imwrite(str(path), image, JPEG_PARAMS)
             result["images"].append(path)
         if video:
             if writer is None:

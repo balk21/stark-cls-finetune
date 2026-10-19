@@ -332,13 +332,18 @@ def show_side_by_side(names, sequence, kind="iou_conf"):
 
 # ------------------------------------------------------------------ train
 def draw(experiment, sequence, frames=(), video=True):
-    """Ground-truth (green) and predicted (red) boxes of a sequence: shows the chosen frames, returns the files
-    in <outputs>/<experiment>/boxes/<sequence>/."""
+    """Ground-truth (green) and predicted (red) boxes of a sequence: shows the chosen frames (frames="all": writes
+    every frame, shows none), returns the files in <outputs>/<experiment>/boxes/<sequence>/."""
     from IPython.display import Image, Markdown, display
-    frames = sorted({int(f) for f in frames})
-    cli("draw", str(experiment), "--sequence", sequence, "--frames", *map(str, frames), *([] if video else ["--no-video"]))
+    every = frames == "all"
+    frames = [] if every else sorted({int(f) for f in frames})
+    args = ["--frames", "all"] if every else ["--frames", *map(str, frames)]
+    cli("draw", str(experiment), "--sequence", sequence, *args, *([] if video else ["--no-video"]))
     box_dir = outputs_dir() / experiment / "boxes" / sequence
-    images = [box_dir / f"{sequence}_{f:06d}.png" for f in frames]
+    if every:
+        images = sorted(box_dir.glob(f"{sequence}_*.jpg"))
+        return {"images": images, "video": box_dir / f"{sequence}.mp4" if video else None}
+    images = [box_dir / f"{sequence}_{f:06d}.jpg" for f in frames]
     for img in images:
         display(Markdown(f"**{sequence}, frame {img.stem.rsplit('_', 1)[-1].lstrip('0') or '0'}**"))
         display(Image(filename=str(img)))

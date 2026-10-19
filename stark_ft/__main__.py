@@ -18,7 +18,7 @@ Test
     python -m stark_ft analyze outputs/<experiment> [--score-thr 0.35] [--iou-thr 0.5] [--thr-resolution 100]
     python -m stark_ft list
     python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
-    python -m stark_ft draw <experiment> --sequence bull [--frames 1 100 500] [--no-video]
+    python -m stark_ft draw <experiment> --sequence bull [--frames 1 100 500 | all] [--no-video]
 """
 import argparse
 import json
@@ -278,7 +278,7 @@ def main(argv=None):
     p = sub.add_parser("draw", help="Test: draw the ground-truth (green) and predicted (red) boxes of a sequence")
     p.add_argument("experiment", help="outputs/<experiment> or the experiment name")
     p.add_argument("--sequence", required=True)
-    p.add_argument("--frames", nargs="*", type=int, default=[], help="Frames written as images (0 = first frame)")
+    p.add_argument("--frames", nargs="*", default=[], help="Frames written as images (0 = first frame) | all")
     p.add_argument("--no-video", action="store_true", help="No video of the whole sequence")
     p.add_argument("--fps", type=int, default=30)
     p = sub.add_parser("compare", help="Test: compare experiments")
@@ -348,8 +348,11 @@ def main(argv=None):
         from stark_ft.test.draw import draw_sequence
         exp = Path(args.experiment)
         exp = exp if (exp / "experiment.json").is_file() else get_paths().outputs / args.experiment
-        out = draw_sequence(exp, args.sequence, frames=args.frames, video=not args.no_video, fps=args.fps)
-        for path in out["images"] + ([out["video"]] if out["video"] else []):
+        frames = "all" if args.frames == ["all"] else [int(f) for f in args.frames]
+        out = draw_sequence(exp, args.sequence, frames=frames, video=not args.no_video, fps=args.fps)
+        if len(out["images"]) > 20:
+            print(f"{len(out['images'])} frames in {out['images'][0].parent}")
+        for path in (out["images"] if len(out["images"]) <= 20 else []) + ([out["video"]] if out["video"] else []):
             print(path)
         return 0
     if args.cmd == "list":

@@ -222,7 +222,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `predictions/<seq>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<seq>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (one row per step; probabilities before the update) |
 | `tracker_logs/<seq>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): the frame the template was taken from and its score |
-| `boxes/<seq>/` | `draw` / `draw.ipynb`: ground-truth box green, predicted box red (1 pixel), frame number, IoU and score top left; the chosen frames as `<seq>_<frame>.png`, every frame as `<seq>.mp4` (H.264 where ffmpeg is installed, e.g. Colab) |
+| `boxes/<seq>/` | `draw` / `draw.ipynb`: ground-truth box green, predicted box red (1 pixel), frame number, IoU and score top left; the chosen frames (`--frames all`: every frame) as `<seq>_<frame>.jpg` (JPEG without chroma subsampling, so the 1-pixel lines keep their colour; ≈ 50–300 KB per frame), every frame as `<seq>.mp4` (H.264 where ffmpeg is installed, e.g. Colab) |
 | `plots/<seq>/iou_conf.png` | IoU and score vs. frame (grey: target absent; red: template update; green: fine-tuning; black: fixed threshold; purple: F-max threshold) |
 | `plots/<seq>/finetune_loss.png` | Loss and positive / negative probabilities per step |
 | `metrics/summary.txt`, `metrics.xlsx`, `metrics.json` | Summary and per-sequence metrics |

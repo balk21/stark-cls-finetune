@@ -224,7 +224,7 @@ ve/veya `--set anahtar=değer`.
 | `predictions/<dizi>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<dizi>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (adım başına bir satır; olasılıklar güncellemeden önce) |
 | `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): template'in alındığı kare ve skoru |
-| `boxes/<dizi>/` | `draw` / `draw.ipynb`: ground-truth kutusu yeşil, tahmin kutusu kırmızı (1 piksel), sol üstte kare numarası, IoU ve skor; seçilen kareler `<dizi>_<kare>.png`, tüm kareler `<dizi>.mp4` (ffmpeg kurulu yerlerde, örn. Colab, H.264) |
+| `boxes/<dizi>/` | `draw` / `draw.ipynb`: ground-truth kutusu yeşil, tahmin kutusu kırmızı (1 piksel), sol üstte kare numarası, IoU ve skor; seçilen kareler (`--frames all`: tüm kareler) `<dizi>_<kare>.jpg` (renk alt örneklemesiz JPEG, 1 piksellik çizgiler rengini korur; kare başına ≈ 50–300 KB), tüm kareler `<dizi>.mp4` (ffmpeg kurulu yerlerde, örn. Colab, H.264) |
 | `plots/<dizi>/iou_conf.png` | Kareye göre IoU ve skor (gri: hedef yok; kırmızı: template update; yeşil: fine-tune; siyah: sabit eşik; mor: F-maksimum eşik) |
 | `plots/<dizi>/finetune_loss.png` | Adım başına loss ve pozitif / negatif olasılıklar |
 | `metrics/summary.txt`, `metrics.xlsx`, `metrics.json` | Özet ve dizi başına metrikler |

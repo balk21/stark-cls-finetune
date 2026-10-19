@@ -38,16 +38,24 @@ def test_boxes_colours_and_text():
     with tempfile.TemporaryDirectory() as tmp:
         exp, paths = _experiment(Path(tmp))
         out = draw_sequence(exp, "toy", frames=[0, 1, 2], video=False, paths=paths)
-        assert [p.name for p in out["images"]] == ["toy_000000.png", "toy_000001.png", "toy_000002.png"]
+        assert [p.name for p in out["images"]] == ["toy_000000.jpg", "toy_000001.jpg", "toy_000002.jpg"]
         assert out["video"] is None
-        img = cv2.imread(str(out["images"][1]))  # BGR
-        assert tuple(img[45, 22]) == (0, 255, 0)     # left edge of the ground-truth box: green
-        assert tuple(img[80, 60]) == (0, 0, 255)     # left edge of the predicted box: red
-        assert tuple(img[45, 23]) == (128, 128, 128)  # 1 pixel thick: next to the edge is the background again
+        img = cv2.imread(str(out["images"][1])).astype(int)  # BGR; JPEG 4:4:4 keeps the colours within a few levels
+        close = lambda px, bgr: np.abs(px - np.array(bgr)).max() <= 12  # noqa: E731
+        assert close(img[45, 22], (0, 255, 0))       # left edge of the ground-truth box: green
+        assert close(img[80, 60], (0, 0, 255))       # left edge of the predicted box: red
+        assert close(img[45, 24], (128, 128, 128))   # 1 pixel thick: 2 pixels further in is the background again
         assert img[2:10, 2:60].mean() < 110          # dark text box in the top-left corner
-        absent = cv2.imread(str(out["images"][2]))
-        assert tuple(absent[100, 100]) == (0, 0, 255)
-        assert not (absent == (0, 255, 0)).all(axis=2).any()  # target absent: no ground-truth box
+        absent = cv2.imread(str(out["images"][2])).astype(int)
+        assert close(absent[100, 100], (0, 0, 255))
+        assert not (np.abs(absent - (0, 255, 0)).max(axis=2) <= 12).any()  # target absent: no ground-truth box
+
+
+def test_all_frames():
+    with tempfile.TemporaryDirectory() as tmp:
+        exp, paths = _experiment(Path(tmp))
+        out = draw_sequence(exp, "toy", frames="all", video=False, paths=paths)
+        assert [p.name for p in out["images"]] == ["toy_000000.jpg", "toy_000001.jpg", "toy_000002.jpg"]
 
 
 def test_video():
