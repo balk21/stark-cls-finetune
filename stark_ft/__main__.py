@@ -18,11 +18,13 @@ Test
     python -m stark_ft analyze outputs/<experiment> [--score-thr 0.35] [--iou-thr 0.5] [--thr-resolution 100]
     python -m stark_ft list
     python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
+    python -m stark_ft draw <experiment> --sequence bull [--frames 1 100 500] [--no-video]
 """
 import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 # The CLI is never interactive; the MPLBACKEND that Jupyter passes on to subprocesses
 # (e.g. matplotlib_inline) may not exist in the vot1 environment.
@@ -273,6 +275,12 @@ def main(argv=None):
     p.add_argument("--thr-resolution", type=int, help="Number of candidates in the F-max threshold search (100)")
     p.add_argument("--no-plots", action="store_true")
     sub.add_parser("list", help="Test: list analysed experiments")
+    p = sub.add_parser("draw", help="Test: draw the ground-truth (green) and predicted (red) boxes of a sequence")
+    p.add_argument("experiment", help="outputs/<experiment> or the experiment name")
+    p.add_argument("--sequence", required=True)
+    p.add_argument("--frames", nargs="*", type=int, default=[], help="Frames written as images (0 = first frame)")
+    p.add_argument("--no-video", action="store_true", help="No video of the whole sequence")
+    p.add_argument("--fps", type=int, default=30)
     p = sub.add_parser("compare", help="Test: compare experiments")
     p.add_argument("names", nargs="+")
     p.add_argument("--out", help="Excel output (.xlsx): lr, epoch, sequence, method, mAP / AP50 / AP75 per experiment "
@@ -334,6 +342,15 @@ def main(argv=None):
         from stark_ft.test.analysis import analyze_experiment
         analyze_experiment(args.output_dir, score_thr=args.score_thr, iou_thr=args.iou_thr,
                            thr_resolution=args.thr_resolution, plots=not args.no_plots)
+        return 0
+    if args.cmd == "draw":
+        from stark_ft.paths import get_paths
+        from stark_ft.test.draw import draw_sequence
+        exp = Path(args.experiment)
+        exp = exp if (exp / "experiment.json").is_file() else get_paths().outputs / args.experiment
+        out = draw_sequence(exp, args.sequence, frames=args.frames, video=not args.no_video, fps=args.fps)
+        for path in out["images"] + ([out["video"]] if out["video"] else []):
+            print(path)
         return 0
     if args.cmd == "list":
         from stark_ft.test.compare import list_experiments

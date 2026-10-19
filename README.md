@@ -95,7 +95,7 @@ from the GOT-10k archives (docs/train.md).
 | STARK-S50 | `stark_s` | `baseline` / `baseline_got10k_only` | as above (no confidence score: `ft_mode=none`) |
 
 Each of the six is downloaded into `checkpoints/` the first time a test uses it.
-Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
+Notebooks: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb), [`notebooks/draw.ipynb`](notebooks/draw.ipynb) (boxes drawn on the frames).
 Method, parameters, outputs and metrics: [docs/test.md](docs/test.md).
 
 ## Citation

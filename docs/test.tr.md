@@ -72,6 +72,7 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<deney> --score-thr 0.5             # tracking olmadan metrikleri yeniden hesaplar
 python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png  # xlsx: aşağıya bakın
+python -m stark_ft draw <deney> --sequence bull --frames 1 100 500   # karelerin üzerine kutular + video (Çıktılar)
 ```
 
 `comparison.xlsx`: `summary` sayfasında deney başına bir satır (verilen sırayla): `experiment`, `lr`, `epoch` (ilk
@@ -80,7 +81,7 @@ karedeki + her template update'teki fine-tune adımı: online `15+15`, init `15+
 deneyin ayrıca kendi sayfası olur: dizi başına bir satır ve son satırda düz (kare sayısıyla ağırlıklandırılmamış)
 ortalama; `summary` satırı bu ortalamayı gösterir.
 
-Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`. 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop
+Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`, `notebooks/draw.ipynb` (karelerin üzerine kutular). 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop
 GPU'da ≈ 2 saat sürer.
 
 - `show` (notebook: `nb.describe`) çıktı klasörünü, ağırlıkları ve hangi dizilerin indirileceğini gösterir.
@@ -223,6 +224,7 @@ ve/veya `--set anahtar=değer`.
 | `predictions/<dizi>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<dizi>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (adım başına bir satır; olasılıklar güncellemeden önce) |
 | `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): template'in alındığı kare ve skoru |
+| `boxes/<dizi>/` | `draw` / `draw.ipynb`: ground-truth kutusu yeşil, tahmin kutusu kırmızı (1 piksel), sol üstte kare numarası, IoU ve skor; seçilen kareler `<dizi>_<kare>.png`, tüm kareler `<dizi>.mp4` (ffmpeg kurulu yerlerde, örn. Colab, H.264) |
 | `plots/<dizi>/iou_conf.png` | Kareye göre IoU ve skor (gri: hedef yok; kırmızı: template update; yeşil: fine-tune; siyah: sabit eşik; mor: F-maksimum eşik) |
 | `plots/<dizi>/finetune_loss.png` | Adım başına loss ve pozitif / negatif olasılıklar |
 | `metrics/summary.txt`, `metrics.xlsx`, `metrics.json` | Özet ve dizi başına metrikler |

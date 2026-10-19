@@ -95,7 +95,7 @@ bölümleri GOT-10k arşivlerinden açılır (docs/train.tr.md).
 | STARK-S50 | `stark_s` | `baseline` / `baseline_got10k_only` | aynı (güven skoru yok: `ft_mode=none`) |
 
 Altısı da bir test ilk kez kullandığında `checkpoints/` altına indirilir.
-Notebook'lar: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb).
+Notebook'lar: [`notebooks/test.ipynb`](notebooks/test.ipynb), [`notebooks/compare.ipynb`](notebooks/compare.ipynb), [`notebooks/draw.ipynb`](notebooks/draw.ipynb) (karelerin üzerine çizilen kutular).
 Yöntem, parametreler, çıktılar ve metrikler: [docs/test.tr.md](docs/test.tr.md).
 
 ## Atıf

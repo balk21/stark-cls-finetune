@@ -331,6 +331,31 @@ def show_side_by_side(names, sequence, kind="iou_conf"):
 
 
 # ------------------------------------------------------------------ train
+def draw(experiment, sequence, frames=(), video=True):
+    """Ground-truth (green) and predicted (red) boxes of a sequence: shows the chosen frames, returns the files
+    in <outputs>/<experiment>/boxes/<sequence>/."""
+    from IPython.display import Image, Markdown, display
+    frames = sorted({int(f) for f in frames})
+    cli("draw", str(experiment), "--sequence", sequence, "--frames", *map(str, frames), *([] if video else ["--no-video"]))
+    box_dir = outputs_dir() / experiment / "boxes" / sequence
+    images = [box_dir / f"{sequence}_{f:06d}.png" for f in frames]
+    for img in images:
+        display(Markdown(f"**{sequence}, frame {img.stem.rsplit('_', 1)[-1].lstrip('0') or '0'}**"))
+        display(Image(filename=str(img)))
+    return {"images": images, "video": box_dir / f"{sequence}.mp4" if video else None}
+
+
+def show_video(path, max_mb=60, width=720):
+    """Plays a video in the notebook (H.264, as written on Colab); larger files: download them instead."""
+    from IPython.display import Video, display
+    path = Path(path)
+    size = path.stat().st_size / 1e6
+    if size > max_mb:
+        print(f"{path} ({size:.0f} MB) is too large to show here; download it from that folder.")
+        return
+    display(Video(str(path), embed=True, width=width, html_attributes="controls loop"))
+
+
 def _train_file(params: dict) -> Path:
     return _params_file(params, Path(paths()["train_outputs"]), "train")
 
