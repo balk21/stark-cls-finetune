@@ -76,9 +76,10 @@ python -m stark_ft draw <experiment> --sequence bull --frames 1 100 500   # boxe
 
 `comparison.xlsx`: sheet `summary` with one row per experiment (in the given order): `experiment`, `lr`, `epoch`
 (fine-tuning steps on the first frame + at every template update: `15+15` online, `15+0` init, `0+0` none), `sequence`,
-`method` (`orj` = STARK's template update, `max`, `noupd`), `mAP`, `AP50`, `AP75`. If the experiments have several
-sequences, every experiment also gets its own sheet with one row per sequence and the plain (not frame-weighted) mean
-in the last row; the `summary` row shows that mean.
+`method` (`orj` = STARK's template update, `max`, `noupd`), `mAP`, `AP50`, `AP75` (plain mean over the sequences) and
+`mAP weighted`, `AP50 weighted`, `AP75 weighted` (mean weighted by the number of frames of each sequence). If the
+experiments have several sequences, every experiment also gets its own sheet with one row per sequence and the two
+means in the last two rows (`mean`, `weighted mean`).
 
 Notebooks: `notebooks/test.ipynb`, `notebooks/compare.ipynb`, `notebooks/draw.ipynb` (boxes on the frames). All 50 sequences (≈ 215 k frames) take ≈ 2 h on an
 RTX 3060 laptop GPU.

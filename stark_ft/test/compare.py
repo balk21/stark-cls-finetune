@@ -76,6 +76,8 @@ def per_sequence(names, metric="mAP", outputs_dir=None) -> pd.DataFrame:
 
 
 EXCEL_COLUMNS = ["experiment", "lr", "epoch", "sequence", "method", *AP_METRICS]
+WEIGHTED = [f"{k} weighted" for k in AP_METRICS]  # mean weighted by the number of frames of each sequence
+SUMMARY_COLUMNS = [*EXCEL_COLUMNS, *WEIGHTED]
 
 
 def _settings(config: dict):
@@ -99,25 +101,25 @@ def _sheet_name(i, lr, epoch, method):
     return f"{i} {method}" + (f" lr{lr}" if lr != "-" else "") + f" {epoch}"  # at most 31 characters
 
 
-def _write(writer, sheet_name, table, mean_row=False):
+def _write(writer, sheet_name, table, mean_rows=0):
     table.to_excel(writer, sheet_name=sheet_name, index=False)
     sheet = writer.sheets[sheet_name]
     for col, name in enumerate(table.columns, 1):
         width = max(len(str(v)) for v in [name, *table[name].tolist()]) + 2
         sheet.column_dimensions[sheet.cell(row=1, column=col).column_letter].width = min(width, 60)
-        if name in AP_METRICS:
+        if name in AP_METRICS or name in WEIGHTED:
             for row in range(2, len(table) + 2):
                 sheet.cell(row=row, column=col).number_format = "0.0000"
-    if mean_row:
-        for cell in sheet[len(table) + 1]:
+    for row in range(len(table) + 2 - mean_rows, len(table) + 2):
+        for cell in sheet[row]:
             cell.font = Font(bold=True)
 
 
 def export_comparison(names, out_path, outputs_dir=None):
     """Excel. Sheet "summary": one row per experiment (in the given order) with lr, epoch, sequence, method and
-    mAP / AP50 / AP75 (for several sequences: their plain mean). If an experiment has several sequences, every
-    experiment also gets its own sheet with one row per sequence and the plain (not frame-weighted) mean as the last
-    row."""
+    mAP / AP50 / AP75 over its sequences, as the plain mean and as the mean weighted by the number of frames of each
+    sequence. If an experiment has several sequences, every experiment also gets its own sheet with one row per
+    sequence and the two means as the last two rows."""
     outputs_dir = Path(outputs_dir) if outputs_dir else get_paths().outputs
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,16 +130,23 @@ def export_comparison(names, out_path, outputs_dir=None):
         rows = pd.DataFrame([{"experiment": name, "lr": lr, "epoch": epoch, "sequence": r["sequence"],
                               "method": method, **{k: r.get(k, math.nan) for k in AP_METRICS}}
                              for r in data["per_sequence"]], columns=EXCEL_COLUMNS)
-        mean = rows[list(AP_METRICS)].astype(float).mean()  # plain mean over the sequences
+        ap = rows[list(AP_METRICS)].astype(float)
+        mean = ap.mean()  # plain mean over the sequences
+        frames = pd.Series([r.get("frames") for r in data["per_sequence"]], dtype=float)
+        weighted = (ap.mul(frames, axis=0).sum() / frames.sum() if frames.notna().all()  # earlier metrics.json: no frames
+                    else pd.Series(math.nan, index=ap.columns))
+        weighted.index = WEIGHTED
         sequence = rows["sequence"].iloc[0] if len(rows) == 1 else f"{len(rows)} sequences"
         summary.append({"experiment": name, "lr": lr, "epoch": epoch, "sequence": sequence, "method": method,
-                        **mean.to_dict()})
-        mean_row = {**{c: "" for c in EXCEL_COLUMNS}, "sequence": "mean", **mean.to_dict()}
-        per_experiment.append((_sheet_name(i, lr, epoch, method), pd.concat([rows, pd.DataFrame([mean_row])],
-                                                                             ignore_index=True)))
+                        **mean.to_dict(), **weighted.to_dict()})
+        blank = {c: "" for c in EXCEL_COLUMNS}
+        mean_rows = pd.DataFrame([{**blank, "sequence": "mean", **mean.to_dict()},
+                                  {**blank, "sequence": "weighted mean", **dict(zip(AP_METRICS, weighted))}])
+        per_experiment.append((_sheet_name(i, lr, epoch, method), pd.concat([rows, mean_rows], ignore_index=True),
+                               len(rows)))
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        _write(writer, "summary", pd.DataFrame(summary, columns=EXCEL_COLUMNS))
-        if any(len(t) > 2 for _, t in per_experiment):  # some experiment has several sequences
-            for sheet_name, table in per_experiment:
-                _write(writer, sheet_name, table, mean_row=True)
+        _write(writer, "summary", pd.DataFrame(summary, columns=SUMMARY_COLUMNS))
+        if any(n > 1 for _, _, n in per_experiment):  # some experiment has several sequences
+            for sheet_name, table, _ in per_experiment:
+                _write(writer, sheet_name, table, mean_rows=2)
     return out_path

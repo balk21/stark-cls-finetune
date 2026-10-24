@@ -77,9 +77,10 @@ python -m stark_ft draw <deney> --sequence bull --frames 1 100 500   # karelerin
 
 `comparison.xlsx`: `summary` sayfasında deney başına bir satır (verilen sırayla): `experiment`, `lr`, `epoch` (ilk
 karedeki + her template update'teki fine-tune adımı: online `15+15`, init `15+0`, none `0+0`), `sequence`, `method`
-(`orj` = STARK'ın template update'i, `max`, `noupd`), `mAP`, `AP50`, `AP75`. Deneylerde birden fazla dizi varsa her
-deneyin ayrıca kendi sayfası olur: dizi başına bir satır ve son satırda düz (kare sayısıyla ağırlıklandırılmamış)
-ortalama; `summary` satırı bu ortalamayı gösterir.
+(`orj` = STARK'ın template update'i, `max`, `noupd`), `mAP`, `AP50`, `AP75` (dizilerin düz ortalaması) ve
+`mAP weighted`, `AP50 weighted`, `AP75 weighted` (dizilerin kare sayısıyla ağırlıklı ortalaması). Deneylerde birden
+fazla dizi varsa her deneyin ayrıca kendi sayfası olur: dizi başına bir satır ve son iki satırda iki ortalama (`mean`,
+`weighted mean`).
 
 Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`, `notebooks/draw.ipynb` (karelerin üzerine kutular). 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop
 GPU'da ≈ 2 saat sürer.
