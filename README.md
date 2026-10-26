@@ -65,7 +65,7 @@ Our runs are kept apart from STARK's published training: they are trained only o
 `got10k, coco, lasot, trackingnet`) and grouped by name (model + datasets + stage). Stage 2 on STARK's own weights
 (`--set init=official`) is possible, but such runs are named `..._on-official_...` and listed separately.
 `--set model_config=baseline` trains STARK-ST50. Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb).
-Details: [docs/train.md](docs/train.md).
+Details: [docs/train.md](docs/train.md); on a rented GPU machine: [docs/server.md](docs/server.md).
 
 ## Test
 

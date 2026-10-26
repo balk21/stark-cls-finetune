@@ -65,7 +65,7 @@ Bizim koşularımız STARK'ın yayımladığı eğitimden ayrı tutulur: yalnız
 (`got10k, coco, lasot, trackingnet`'in herhangi bir alt kümesi) ve adlarıyla gruplanır (model + veri setleri + aşama).
 Aşama 2'yi STARK'ın kendi ağırlıkları üzerine eğitmek (`--set init=official`) mümkündür, ama bu koşular
 `..._on-official_...` olarak adlandırılır ve ayrı listelenir. `--set model_config=baseline` STARK-ST50'yi eğitir.
-Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Ayrıntılar: [docs/train.tr.md](docs/train.tr.md).
+Notebook: [`notebooks/train.ipynb`](notebooks/train.ipynb). Ayrıntılar: [docs/train.tr.md](docs/train.tr.md); kiralık GPU makinesinde: [docs/server.tr.md](docs/server.tr.md).
 
 ## Test
 
