@@ -19,12 +19,12 @@ Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ay
 | Veri seti | Komut | İndirme → diskte |
 |---|---|---|
 | COCO | `scripts/get_coco.sh` | 19 GB → 20 GB |
-| GOT-10k | `scripts/get_got10k.sh <Google Drive linki \| full_data.zip yolu>` | 70.7 GB → 74 GB |
+| GOT-10k | `scripts/get_got10k.sh` | 70.7 GB → 74 GB |
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Arşivler açıldıktan sonra silinir; `KEEP_ARCHIVES=1 scripts/get_coco.sh` saklar.
-- GOT-10k linki: `full_data.zip`'in kendi Google Drive'ınızdaki kopyası, "bağlantıya sahip herkes" ile paylaşılmış
-  ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
+- GOT-10k: `full_data.zip`'in Google Drive'daki bir kopyasından (link betikte); başka bir kaynak argüman olarak:
+  `scripts/get_got10k.sh <Google Drive linki | full_data.zip yolu>` ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
 - Klasörler: `<data>/train/{coco, got10k/train, lasot}`, eğitim koşuları `<data>/training/` altında.
 
 ## 2. Eğitim

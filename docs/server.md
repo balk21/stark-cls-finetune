@@ -19,11 +19,12 @@ Only the datasets you train on; they can run at the same time (separate terminal
 | Dataset | Command | Download → on disk |
 |---|---|---|
 | COCO | `scripts/get_coco.sh` | 19 GB → 20 GB |
-| GOT-10k | `scripts/get_got10k.sh <Google Drive link \| path of full_data.zip>` | 70.7 GB → 74 GB |
+| GOT-10k | `scripts/get_got10k.sh` | 70.7 GB → 74 GB |
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
-- GOT-10k link: a copy of `full_data.zip` in your own Google Drive, shared as "anyone with the link"
+- GOT-10k: from a copy of `full_data.zip` on Google Drive (the link is in the script); another source as argument:
+  `scripts/get_got10k.sh <Google Drive link | path of full_data.zip>`
   ([colab.md](colab.md#got-10k-from-google-drive)).
 - Folders: `<data>/train/{coco, got10k/train, lasot}`, training runs in `<data>/training/`.
 
