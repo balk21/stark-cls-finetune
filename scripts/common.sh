@@ -28,8 +28,15 @@ train_path() {  # train_data | train_outputs | archives (configs/paths*.yaml)
 in_tmux() {  # in_tmux <session> <command ...>: runs the command in a detached tmux session (survives SSH)
   local session=$1; shift
   if tmux has-session -t "$session" 2>/dev/null; then
-    echo "tmux session '$session' already exists: tmux attach -t $session" >&2; exit 1
+    if [ "$(tmux display-message -p -t "$session" '#{pane_dead}')" != 1 ]; then
+      echo "tmux session '$session' is still running: tmux attach -t $session" >&2; exit 1
+    fi
+    echo "Closing the finished tmux session '$session' (exit status $(tmux display-message -p -t "$session" '#{pane_dead_status}'))"
+    tmux kill-session -t "$session"
   fi
-  tmux new-session -d -s "$session" "cd $(printf %q "$REPO") && $(printf '%q ' "$@"); echo; echo '[finished]'; exec bash"
+  # The pane stays open after the command ends (finished or crashed), with its output; the next start replaces it
+  tmux new-session -d -s "$session" "sleep infinity"  # placeholder: remain-on-exit is set before the command starts
+  tmux set-option -t "$session" remain-on-exit on >/dev/null
+  tmux respawn-pane -k -t "$session" "cd $(printf %q "$REPO") && $(printf '%q ' "$@")"
   echo "Started in tmux session '$session': tmux attach -t $session   (leave it running: Ctrl-b d)"
 }
