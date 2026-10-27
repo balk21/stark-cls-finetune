@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up the rclone remote "gdrive" (Google Drive: GOT-10k, backups) from a token, without `rclone config`.
+# Sets up the rclone remote "gdrive" (Google Drive: backups, GOT-10k from a Drive link) from a token.
 #   scripts/gdrive.sh '<token>'
 # The token: `rclone authorize "drive"` on a computer with a browser (Mac: brew install rclone) prints it as one line,
 # {"access_token": ...}. Running it again with a new token replaces the remote.

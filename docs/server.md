@@ -15,7 +15,7 @@ scripts/setup.sh                    # tools, vot1 environment (~10 min), paths, 
 Data and training runs go into `/workspace/data` (vast.ai), otherwise into the repository folder; another folder on
 the large disk (`df -h`): `scripts/setup.sh <folder>`.
 
-Google Drive (GOT-10k and the backups): on your own computer with a browser, `rclone authorize "drive"`
+Google Drive (the backups): on your own computer with a browser, `rclone authorize "drive"`
 ([rclone.org/install](https://rclone.org/install/), Mac: `brew install rclone`) prints a token, one line
 `{"access_token": ...}`. Paste it on the machine (no questions; again with a new token if it stops working):
 
@@ -32,11 +32,11 @@ Only the datasets you train on; they can run at the same time (separate terminal
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
-- GOT-10k: a copy of `full_data.zip` shared on Google Drive (the link is in the script), downloaded by its file ID
-  with rclone and your Google account when the remote `gdrive` exists (Google often refuses anonymous downloads to
-  rented machines: "Quota exceeded"), otherwise directly. Another source as argument:
-  `scripts/get_got10k.sh <Google Drive link | remote:folder | path of full_data.zip>`
-  ([colab.md](colab.md#got-10k-from-google-drive)).
+- GOT-10k: `full_data.zip` from Hugging Face ([jinyoungkim/GoT-10k](https://huggingface.co/datasets/jinyoungkim/GoT-10k):
+  two parts that together are the official `full_data.zip`, 70 692 770 032 bytes; no account). Another source as
+  argument: `scripts/get_got10k.sh <Google Drive link | remote:folder | path of full_data.zip>`; a Drive link goes
+  through rclone and your Google account when the remote `gdrive` exists (Google often refuses anonymous downloads to
+  rented machines: "Quota exceeded").
 - Folders: `<data>/train/{coco, got10k/train, lasot}`, training runs in `<data>/training/`.
 
 ## 2. Training

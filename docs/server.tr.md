@@ -15,7 +15,7 @@ scripts/setup.sh                    # araçlar, vot1 ortamı (~10 dk), yollar, k
 Veriler ve eğitim koşuları `/workspace/data`'ya (vast.ai), o yoksa repo klasörüne gider; büyük diskte başka bir
 klasör (`df -h`): `scripts/setup.sh <klasör>`.
 
-Google Drive (GOT-10k ve yedekler): tarayıcısı olan kendi bilgisayarınızda `rclone authorize "drive"`
+Google Drive (yedekler): tarayıcısı olan kendi bilgisayarınızda `rclone authorize "drive"`
 ([rclone.org/install](https://rclone.org/install/), Mac: `brew install rclone`) tek satırlık bir token yazar,
 `{"access_token": ...}`. Bunu makinede yapıştırın (soru sormaz; çalışmayı bırakırsa yeni token'la tekrar):
 
@@ -32,11 +32,11 @@ Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ay
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Arşivler açıldıktan sonra silinir; `KEEP_ARCHIVES=1 scripts/get_coco.sh` saklar.
-- GOT-10k: `full_data.zip`'in Google Drive'da paylaşılan bir kopyası (link betikte); `gdrive` remote'u varsa rclone
-  ve Google hesabınızla dosya ID'sinden, yoksa doğrudan indirilir (Google kiralık makinelere girişsiz indirmeyi sık
-  sık reddeder: "Quota exceeded"). Başka bir kaynak argüman olarak:
-  `scripts/get_got10k.sh <Google Drive linki | remote:klasör | full_data.zip yolu>`
-  ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
+- GOT-10k: `full_data.zip` Hugging Face'ten ([jinyoungkim/GoT-10k](https://huggingface.co/datasets/jinyoungkim/GoT-10k):
+  birlikte resmi `full_data.zip` olan iki parça, 70 692 770 032 bayt; hesap gerekmez). Başka bir kaynak argüman
+  olarak: `scripts/get_got10k.sh <Google Drive linki | remote:klasör | full_data.zip yolu>`; Drive linki, `gdrive`
+  remote'u varsa rclone ve Google hesabınızla indirilir (Google kiralık makinelere girişsiz indirmeyi sık sık
+  reddeder: "Quota exceeded").
 - Klasörler: `<data>/train/{coco, got10k/train, lasot}`, eğitim koşuları `<data>/training/` altında.
 
 ## 2. Eğitim

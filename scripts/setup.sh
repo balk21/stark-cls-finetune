@@ -11,7 +11,7 @@ if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null; then
   { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tmux unzip curl bzip2 >/dev/null; } ||
     echo "apt-get failed: install tmux, unzip, curl and bzip2 yourself" >&2
 fi
-# rclone from rclone.org (Google Drive: GOT-10k, backups); the apt version is too old (no `backend copyid`)
+# rclone from rclone.org (Google Drive: backups, GOT-10k from a Drive link); apt has an old one without copyid
 if ! rclone backend help drive 2>/dev/null | grep -q copyid; then
   if [ "$(id -u)" = 0 ]; then
     curl -fsSL https://rclone.org/install.sh | bash >/dev/null || echo "rclone could not be installed" >&2
@@ -57,6 +57,6 @@ fi
 
 echo "vot1 python: $PY"
 if command -v rclone >/dev/null && ! rclone listremotes | grep -qxF "gdrive:"; then
-  echo "Google Drive (GOT-10k, backups) is not set up: scripts/gdrive.sh '<token>' (docs/server.md)"
+  echo "Google Drive (backups) is not set up: scripts/gdrive.sh '<token>' (docs/server.md)"
 fi
 stark check
