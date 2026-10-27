@@ -216,5 +216,5 @@ orijinalde 8 GPU'nun her birindekiyle aynı).
 | `Not enough disk space for ...` | Açılmış veri setleri sığmıyor (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Daha büyük disk veya daha az veri seti kullanın. |
 | `Stage 2 starts from the stage-1 run of the same family ...` | Önce aşama 1'i eğitin (aynı parametreler, `stage=1`) ya da `init` olarak tamamlanmış başka bir aşama-1 koşusu / `"official"` verin. |
 | `No GOT-10k archive in ...` | GOT-10k arşivlerini mesajdaki klasöre koyun (klasör oluşturulur) ya da link / arşiv yollarını verin. |
-| `... 'Google Drive - Quota exceeded'` | Paylaşılan dosya günlük indirme sınırına ulaştı; kendi kopyanızı kullanın ([colab.tr.md](colab.tr.md#google-driveda-got-10k)). |
+| `... 'Google Drive - Quota exceeded'` | Google indirmeyi reddetti (paylaşılan dosyanın günlük sınırı ya da kiralık makineye girişsiz indirme); kendi kopyanızı kullanın ([colab.tr.md](colab.tr.md#google-driveda-got-10k)), kiralık makinede rclone ile ([server.tr.md](server.tr.md)). |
 | `... already exists with different parameters` / `different version of the training code` | Başka bir `name` ya da sıfırdan koşu için `--overwrite` (notebook: `overwrite=True`) kullanın. |

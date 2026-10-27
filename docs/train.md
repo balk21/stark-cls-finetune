@@ -210,5 +210,5 @@ as on each of the 8 GPUs of the original).
 | `Not enough disk space for ...` | The extracted datasets do not fit (GOT-10k ≈ 74 GB, COCO ≈ 20 GB). Use a larger disk or fewer datasets. |
 | `Stage 2 starts from the stage-1 run of the same family ...` | Train stage 1 first (the same parameters with `stage=1`), or give another finished stage-1 run / `"official"` as `init`. |
 | `No GOT-10k archive in ...` | Put the GOT-10k archives into the folder named in the message (it is created), or give links / archive paths. |
-| `... 'Google Drive - Quota exceeded'` | The shared file reached its daily download limit; use your own copy of it ([colab.md](colab.md#got-10k-from-google-drive)). |
+| `... 'Google Drive - Quota exceeded'` | Google refused the download (the shared file's daily limit, or anonymous downloads to a rented machine); use your own copy of it ([colab.md](colab.md#got-10k-from-google-drive)), on a rented machine with rclone ([server.md](server.md)). |
 | `... already exists with different parameters` / `different version of the training code` | Use another `name`, or `--overwrite` (notebook: `overwrite=True`) for a fresh run. |

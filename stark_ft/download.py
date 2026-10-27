@@ -41,10 +41,12 @@ def direct_url(url: str) -> str:
     return f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t" if m else url
 
 
-QUOTA_HELP = ("Google Drive limits how often a shared file can be downloaded per day, and this file's limit is "
-              "used up (it may work again later). The reliable way: open the link in the browser, 'Add shortcut to "
-              "Drive', right-click the shortcut -> 'Make a copy', and put the copy into the GOT-10k archive folder (on "
-              "Colab <colab_drive>/train_archives/got10k/). Your own copy has no such limit. See docs/colab.md.")
+QUOTA_HELP = ("Google Drive refused the download: the daily download limit of this shared file is used up, or Google "
+              "limits anonymous downloads to this machine (common on rented cloud machines). It may work again later. "
+              "The reliable way is your own copy in Drive: open the link in the browser, 'Add shortcut to Drive', "
+              "right-click the shortcut -> 'Make a copy'. On Colab put the copy into "
+              "<colab_drive>/train_archives/got10k/ (docs/colab.md); on another machine download it with rclone: "
+              "scripts/get_got10k.sh gdrive:<Drive folder> (docs/server.md).")
 
 
 def _open(url, headers=None):

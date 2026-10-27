@@ -14,6 +14,12 @@ scripts/setup.sh /workspace/data    # araçlar, vot1 ortamı (~10 dk), yollar, k
 
 `/workspace/data`: büyük diskteki bir klasör (`df -h`). Verilmezse veriler repo klasörüne gider.
 
+GOT-10k ve yedekler için Google Drive erişimi (makine başına bir kez; soru soran tek adım):
+
+```bash
+rclone config    # n, ad gdrive, tür drive, Enter ... "Use web browser?" n -> verilen `rclone authorize`'ı kendi bilgisayarında çalıştır
+```
+
 Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ayrı terminal ya da tmux pencereleri):
 
 | Veri seti | Komut | İndirme → diskte |
@@ -23,8 +29,11 @@ Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ay
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Arşivler açıldıktan sonra silinir; `KEEP_ARCHIVES=1 scripts/get_coco.sh` saklar.
-- GOT-10k: `full_data.zip`'in Google Drive'daki bir kopyasından (link betikte); başka bir kaynak argüman olarak:
-  `scripts/get_got10k.sh <Google Drive linki | full_data.zip yolu>` ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
+- GOT-10k: `full_data.zip`'in Google Drive'daki bir kopyası; `gdrive` remote'u kuruluysa rclone ile
+  `gdrive:LOKAP/train_archives/got10k`'ten, değilse paylaşım linkinden (ikisi de betikte; Google kiralık makinelere
+  girişsiz indirmeyi sık sık reddeder: "Quota exceeded"). Başka bir kaynak argüman olarak:
+  `scripts/get_got10k.sh <remote:klasör | Google Drive linki | full_data.zip yolu>`
+  ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
 - Klasörler: `<data>/train/{coco, got10k/train, lasot}`, eğitim koşuları `<data>/training/` altında.
 
 ## 2. Eğitim
@@ -40,10 +49,9 @@ scripts/stark.sh train-report st101_lasot+got10k+coco_stage1           # ilerlem
 - `train.sh`, `python -m stark_ft train` ile aynı argümanları alır ([train.tr.md](train.tr.md)), ör.
   `--set num_workers=12`, `--set model_config=baseline`.
 
-Yedekleme (kiralık makinenin diski makineyle birlikte gider):
+Yedekleme (kiralık makinenin diski makineyle birlikte gider; rclone remote'u 1. bölümden):
 
 ```bash
-rclone config                                                              # bir kez, ör. Google Drive'ı "gdrive" adıyla
 scripts/backup.sh st101_lasot+got10k+coco_stage1 gdrive:LOKAP/training     # 30 dk'da bir, tmux oturumu backup-<koşu>
 scripts/restore.sh st101_lasot+got10k+coco_stage1 gdrive:LOKAP/training    # yeni makinede; sonra aynı train.sh
 ```

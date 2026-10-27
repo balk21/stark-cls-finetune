@@ -14,6 +14,12 @@ scripts/setup.sh /workspace/data    # tools, vot1 environment (~10 min), paths, 
 
 `/workspace/data`: a folder on the large disk (`df -h`). Without it, the data goes into the repository folder.
 
+Google Drive access, for GOT-10k and the backups (once per machine; the only step that asks questions):
+
+```bash
+rclone config    # n, name gdrive, type drive, Enter ... "Use web browser?" n -> run the shown `rclone authorize` on your computer
+```
+
 Only the datasets you train on; they can run at the same time (separate terminals or tmux windows):
 
 | Dataset | Command | Download → on disk |
@@ -23,8 +29,10 @@ Only the datasets you train on; they can run at the same time (separate terminal
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
-- GOT-10k: from a copy of `full_data.zip` on Google Drive (the link is in the script); another source as argument:
-  `scripts/get_got10k.sh <Google Drive link | path of full_data.zip>`
+- GOT-10k: a copy of `full_data.zip` in Google Drive, with rclone from `gdrive:LOKAP/train_archives/got10k` when the
+  remote `gdrive` is set up, otherwise from its share link (both in the script; Google often refuses anonymous
+  downloads to rented machines: "Quota exceeded"). Another source as argument:
+  `scripts/get_got10k.sh <remote:folder | Google Drive link | path of full_data.zip>`
   ([colab.md](colab.md#got-10k-from-google-drive)).
 - Folders: `<data>/train/{coco, got10k/train, lasot}`, training runs in `<data>/training/`.
 
@@ -41,10 +49,9 @@ scripts/stark.sh train-report st101_lasot+got10k+coco_stage1           # progres
 - `train.sh` takes the arguments of `python -m stark_ft train` ([train.md](train.md#parameters)), e.g.
   `--set num_workers=12`, `--set model_config=baseline`.
 
-Backups (the disk of a rented machine is lost with it):
+Backups (the disk of a rented machine is lost with it; the rclone remote from part 1):
 
 ```bash
-rclone config                                                              # once, e.g. Google Drive as "gdrive"
 scripts/backup.sh st101_lasot+got10k+coco_stage1 gdrive:LOKAP/training     # every 30 min, tmux session backup-<run>
 scripts/restore.sh st101_lasot+got10k+coco_stage1 gdrive:LOKAP/training    # on a new machine; then the same train.sh
 ```
