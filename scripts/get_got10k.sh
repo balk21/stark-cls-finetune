@@ -2,7 +2,7 @@
 # GOT-10k train: full_data.zip (70.7 GB) -> <train_data>/got10k/train (74 GB, 9 335 videos).
 #   scripts/get_got10k.sh [Google Drive share link | URL | rclone source remote:folder | path of full_data.zip]
 # Default source: full_data.zip on Hugging Face (GOT10K_HF: two parts, together the official full_data.zip of
-# 70 692 770 032 bytes; no account needed; an interrupted download continues). A Google Drive link is downloaded with
+# 70 692 770 032 bytes; no account needed; 16 connections with rclone). A Google Drive link is downloaded with
 # rclone and your Google account when the remote gdrive is set up (scripts/gdrive.sh; Google often refuses anonymous
 # downloads to cloud machines), otherwise directly. A downloaded archive is deleted after extraction (KEEP_ARCHIVES=1
 # keeps it; needed for testing on GOT-10k val / test); an archive given as a path is never deleted.
@@ -48,7 +48,15 @@ hf_full_data() {  # <archives>/got10k/full_data.zip from the two parts on Huggin
     if [ "$have" -gt "$size" ]; then truncate -s "$size" "$zip.part$p"; have=$size; fi  # an interrupted joining
     if [ "$have" != "$size" ]; then
       echo "Downloading full_data.zip.part$p ($((size / 1000000000)) GB) from $GOT10K_HF.part$p"
-      curl -fL --retry 5 -C - -o "$zip.part$p" "$GOT10K_HF.part$p"
+      if command -v rclone >/dev/null; then  # 16 connections (one gets ~10 MB/s); starts the part again
+        rclone copyto ":http:${GOT10K_HF##*/}.part$p" "$zip.part$p" --http-url "${GOT10K_HF%/*}/" \
+          --multi-thread-streams 16 --multi-thread-cutoff 64M --retries 5 -P
+      else
+        curl -fL --retry 5 -C - -o "$zip.part$p" "$GOT10K_HF.part$p"
+      fi
+      if [ "$(stat -c %s "$zip.part$p")" != "$size" ]; then
+        echo "full_data.zip.part$p is incomplete; run the script again" >&2; exit 1
+      fi
     fi
   done
   echo "Joining the parts into $zip"

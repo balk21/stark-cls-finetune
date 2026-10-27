@@ -33,7 +33,8 @@ Only the datasets you train on; they can run at the same time (separate terminal
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
 - GOT-10k: `full_data.zip` from Hugging Face ([jinyoungkim/GoT-10k](https://huggingface.co/datasets/jinyoungkim/GoT-10k):
-  two parts that together are the official `full_data.zip`, 70 692 770 032 bytes; no account). Another source as
+  two parts that together are the official `full_data.zip`, 70 692 770 032 bytes; no account;
+  16 connections). Another source as
   argument: `scripts/get_got10k.sh <Google Drive link | remote:folder | path of full_data.zip>`; a Drive link goes
   through rclone and your Google account when the remote `gdrive` exists (Google often refuses anonymous downloads to
   rented machines: "Quota exceeded").

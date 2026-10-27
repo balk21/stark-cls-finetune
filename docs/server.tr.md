@@ -33,7 +33,8 @@ Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ay
 
 - Arşivler açıldıktan sonra silinir; `KEEP_ARCHIVES=1 scripts/get_coco.sh` saklar.
 - GOT-10k: `full_data.zip` Hugging Face'ten ([jinyoungkim/GoT-10k](https://huggingface.co/datasets/jinyoungkim/GoT-10k):
-  birlikte resmi `full_data.zip` olan iki parça, 70 692 770 032 bayt; hesap gerekmez). Başka bir kaynak argüman
+  birlikte resmi `full_data.zip` olan iki parça, 70 692 770 032 bayt; hesap gerekmez;
+  16 bağlantı). Başka bir kaynak argüman
   olarak: `scripts/get_got10k.sh <Google Drive linki | remote:klasör | full_data.zip yolu>`; Drive linki, `gdrive`
   remote'u varsa rclone ve Google hesabınızla indirilir (Google kiralık makinelere girişsiz indirmeyi sık sık
   reddeder: "Quota exceeded").
