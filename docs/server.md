@@ -14,10 +14,12 @@ scripts/setup.sh /workspace/data    # tools, vot1 environment (~10 min), paths, 
 
 `/workspace/data`: a folder on the large disk (`df -h`). Without it, the data goes into the repository folder.
 
-Google Drive access, for GOT-10k and the backups (once per machine; the only step that asks questions):
+Google Drive (GOT-10k and the backups): on your own computer with a browser, `rclone authorize "drive"`
+([rclone.org/install](https://rclone.org/install/), Mac: `brew install rclone`) prints a token, one line
+`{"access_token": ...}`. Paste it on the machine (no questions; again with a new token if it stops working):
 
 ```bash
-rclone config    # n, name gdrive, type drive, Enter ... "Use web browser?" n -> run the shown `rclone authorize` on your computer
+scripts/gdrive.sh '{"access_token": ...}'    # the rclone remote gdrive
 ```
 
 Only the datasets you train on; they can run at the same time (separate terminals or tmux windows):
@@ -30,7 +32,7 @@ Only the datasets you train on; they can run at the same time (separate terminal
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
 - GOT-10k: a copy of `full_data.zip` in Google Drive, with rclone from `gdrive:LOKAP/train_archives/got10k` when the
-  remote `gdrive` is set up, otherwise from its share link (both in the script; Google often refuses anonymous
+  remote `gdrive` exists, otherwise from its share link (both in the script; Google often refuses anonymous
   downloads to rented machines: "Quota exceeded"). Another source as argument:
   `scripts/get_got10k.sh <remote:folder | Google Drive link | path of full_data.zip>`
   ([colab.md](colab.md#got-10k-from-google-drive)).
@@ -49,7 +51,7 @@ scripts/stark.sh train-report st101_lasot+got10k+coco_stage1           # progres
 - `train.sh` takes the arguments of `python -m stark_ft train` ([train.md](train.md#parameters)), e.g.
   `--set num_workers=12`, `--set model_config=baseline`.
 
-Backups (the disk of a rented machine is lost with it; the rclone remote from part 1):
+Backups (the disk of a rented machine is lost with it; the rclone remote `gdrive` from part 1):
 
 ```bash
 scripts/backup.sh st101_lasot+got10k+coco_stage1 gdrive:LOKAP/training     # every 30 min, tmux session backup-<run>

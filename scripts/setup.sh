@@ -43,4 +43,7 @@ if [ $# -ge 1 ]; then
 fi
 
 echo "vot1 python: $PY"
+if command -v rclone >/dev/null && ! rclone listremotes | grep -qxF "gdrive:"; then
+  echo "Google Drive (GOT-10k, backups) is not set up: scripts/gdrive.sh '<token>' (docs/server.md)"
+fi
 stark check

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copies a training run to cloud storage with rclone every 30 minutes, in the tmux session "backup-<run>".
 #   scripts/backup.sh <run name> <remote:folder> [minutes]      e.g. scripts/backup.sh st101_got10k_stage1 gdrive:LOKAP/training
-# The remote is set up once with `rclone config`. Only changed files are copied.
+# The remote gdrive is set up with scripts/gdrive.sh (docs/server.md). Only changed files are copied.
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 require_env

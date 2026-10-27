@@ -2,7 +2,7 @@
 # GOT-10k train: full_data.zip (70.7 GB) -> <train_data>/got10k/train (74 GB, 9 335 videos).
 #   scripts/get_got10k.sh [rclone source remote:folder | Google Drive share link | URL | path of full_data.zip]
 # Default source: GOT10K_RCLONE (a Google Drive folder with a copy of full_data.zip) if its rclone remote is set up
-# (`rclone config`), otherwise GOT10K_URL (the same copy, shared by link; Google may refuse anonymous downloads to
+# (scripts/gdrive.sh), otherwise GOT10K_URL (the same copy, shared by link; Google may refuse anonymous downloads to
 # cloud machines). A downloaded archive is deleted after extraction (KEEP_ARCHIVES=1 keeps it; needed for testing on
 # GOT-10k val / test); an archive given as a path is never deleted.
 set -euo pipefail
