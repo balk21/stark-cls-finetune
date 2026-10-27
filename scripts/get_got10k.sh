@@ -38,7 +38,7 @@ have_archive() {  # a complete zip in the archive folder (its central directory 
   done
   return 1
 }
-CONNECTIONS=16  # Hugging Face gives one connection ~10 MB/s
+CONNECTIONS=${CONNECTIONS:-16}  # Hugging Face gives one connection ~10 MB/s
 range() {  # range <url> <first byte> <last byte> <file>: continues a partly downloaded byte range
   local try have
   for try in 1 2 3 4 5 6; do  # each try continues after the bytes already in the file
