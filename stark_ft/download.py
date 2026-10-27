@@ -45,8 +45,8 @@ QUOTA_HELP = ("Google Drive refused the download: the daily download limit of th
               "limits anonymous downloads to this machine (common on rented cloud machines). It may work again later. "
               "The reliable way is your own copy in Drive: open the link in the browser, 'Add shortcut to Drive', "
               "right-click the shortcut -> 'Make a copy'. On Colab put the copy into "
-              "<colab_drive>/train_archives/got10k/ (docs/colab.md); on another machine download it with rclone: "
-              "scripts/get_got10k.sh gdrive:<Drive folder> (docs/server.md).")
+              "<colab_drive>/train_archives/got10k/ (docs/colab.md); on another machine set up rclone with your Google "
+              "account (scripts/gdrive.sh, docs/server.md) and run scripts/get_got10k.sh again.")
 
 
 def _open(url, headers=None):

@@ -31,10 +31,10 @@ Yalnızca eğitimde kullanılacak veri setleri; aynı anda çalışabilirler (ay
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Arşivler açıldıktan sonra silinir; `KEEP_ARCHIVES=1 scripts/get_coco.sh` saklar.
-- GOT-10k: `full_data.zip`'in Google Drive'daki bir kopyası; `gdrive` remote'u varsa rclone ile
-  `gdrive:LOKAP/train_archives/got10k`'ten, değilse paylaşım linkinden (ikisi de betikte; Google kiralık makinelere
-  girişsiz indirmeyi sık sık reddeder: "Quota exceeded"). Başka bir kaynak argüman olarak:
-  `scripts/get_got10k.sh <remote:klasör | Google Drive linki | full_data.zip yolu>`
+- GOT-10k: `full_data.zip`'in Google Drive'da paylaşılan bir kopyası (link betikte); `gdrive` remote'u varsa rclone
+  ve Google hesabınızla dosya ID'sinden, yoksa doğrudan indirilir (Google kiralık makinelere girişsiz indirmeyi sık
+  sık reddeder: "Quota exceeded"). Başka bir kaynak argüman olarak:
+  `scripts/get_got10k.sh <Google Drive linki | remote:klasör | full_data.zip yolu>`
   ([colab.tr.md](colab.tr.md#google-driveda-got-10k)).
 - Klasörler: `<data>/train/{coco, got10k/train, lasot}`, eğitim koşuları `<data>/training/` altında.
 

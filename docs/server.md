@@ -31,10 +31,10 @@ Only the datasets you train on; they can run at the same time (separate terminal
 | LaSOT | `scripts/get_lasot.sh` | 248 GB → 248 GB |
 
 - Archives are deleted after extraction; `KEEP_ARCHIVES=1 scripts/get_coco.sh` keeps them.
-- GOT-10k: a copy of `full_data.zip` in Google Drive, with rclone from `gdrive:LOKAP/train_archives/got10k` when the
-  remote `gdrive` exists, otherwise from its share link (both in the script; Google often refuses anonymous
-  downloads to rented machines: "Quota exceeded"). Another source as argument:
-  `scripts/get_got10k.sh <remote:folder | Google Drive link | path of full_data.zip>`
+- GOT-10k: a copy of `full_data.zip` shared on Google Drive (the link is in the script), downloaded by its file ID
+  with rclone and your Google account when the remote `gdrive` exists (Google often refuses anonymous downloads to
+  rented machines: "Quota exceeded"), otherwise directly. Another source as argument:
+  `scripts/get_got10k.sh <Google Drive link | remote:folder | path of full_data.zip>`
   ([colab.md](colab.md#got-10k-from-google-drive)).
 - Folders: `<data>/train/{coco, got10k/train, lasot}`, training runs in `<data>/training/`.
 
