@@ -2,6 +2,9 @@
 # helpers.
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export MAMBA_ROOT_PREFIX=${MAMBA_ROOT_PREFIX:-$HOME/micromamba}
+# Without it, processes forked after `import cv2` (the data-loader workers) start pinned to a single core, e.g. CPUs
+# 0,64 on a vast.ai EPYC: all 32 workers then share it and training runs at a fraction of its speed. Results unchanged.
+export OMP_PROC_BIND=${OMP_PROC_BIND:-false}
 
 _vot1_python() {  # VOT1_PYTHON, or the vot1 environment of micromamba / conda
   local p
