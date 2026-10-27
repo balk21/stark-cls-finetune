@@ -9,10 +9,11 @@ interruption: it continues where it stopped.
 
 ```bash
 git clone https://github.com/balk21/stark-cls-finetune.git && cd stark-cls-finetune
-scripts/setup.sh /workspace/data    # tools, vot1 environment (~10 min), paths, check
+scripts/setup.sh                    # tools, vot1 environment (~10 min), paths, check
 ```
 
-`/workspace/data`: a folder on the large disk (`df -h`). Without it, the data goes into the repository folder.
+Data and training runs go into `/workspace/data` (vast.ai), otherwise into the repository folder; another folder on
+the large disk (`df -h`): `scripts/setup.sh <folder>`.
 
 Google Drive (GOT-10k and the backups): on your own computer with a browser, `rclone authorize "drive"`
 ([rclone.org/install](https://rclone.org/install/), Mac: `brew install rclone`) prints a token, one line

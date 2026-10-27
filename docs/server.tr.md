@@ -9,10 +9,11 @@ Betikler [`scripts/`](../scripts) klasöründe; repo klasöründe çalıştırı
 
 ```bash
 git clone https://github.com/balk21/stark-cls-finetune.git && cd stark-cls-finetune
-scripts/setup.sh /workspace/data    # araçlar, vot1 ortamı (~10 dk), yollar, kontrol
+scripts/setup.sh                    # araçlar, vot1 ortamı (~10 dk), yollar, kontrol
 ```
 
-`/workspace/data`: büyük diskteki bir klasör (`df -h`). Verilmezse veriler repo klasörüne gider.
+Veriler ve eğitim koşuları `/workspace/data`'ya (vast.ai), o yoksa repo klasörüne gider; büyük diskte başka bir
+klasör (`df -h`): `scripts/setup.sh <klasör>`.
 
 Google Drive (GOT-10k ve yedekler): tarayıcısı olan kendi bilgisayarınızda `rclone authorize "drive"`
 ([rclone.org/install](https://rclone.org/install/), Mac: `brew install rclone`) tek satırlık bir token yazar,

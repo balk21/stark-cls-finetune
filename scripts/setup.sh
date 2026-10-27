@@ -2,7 +2,8 @@
 # Prepares a fresh GPU machine: system tools, the vot1 environment (micromamba, ~5-10 min), the paths, a check.
 #   scripts/setup.sh [DATA_DIR]
 # DATA_DIR: training data -> DATA_DIR/train, training runs -> DATA_DIR/training (configs/paths.local.yaml).
-# Without it: inside the repository (data/train, outputs/training).
+# Without it: /workspace/data if /workspace exists (vast.ai) and the paths are not set yet, otherwise inside the
+# repository (data/train, outputs/training) or the paths set before.
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
@@ -43,8 +44,12 @@ if [ -z "$PY" ]; then
   [ -x "$PY" ] || { echo "The vot1 environment was not created: $PY is missing" >&2; exit 1; }
 fi
 
-if [ $# -ge 1 ]; then
-  DATA=$(realpath -m "$1")
+DATA=${1:-}
+if [ -z "$DATA" ] && [ -d /workspace ] && [ ! -f "$REPO/configs/paths.local.yaml" ]; then
+  DATA=/workspace/data  # the large disk of a vast.ai machine
+fi
+if [ -n "$DATA" ]; then
+  DATA=$(realpath -m "$DATA")
   mkdir -p "$DATA"
   printf '# Written by scripts/setup.sh\ntrain_data: %s/train\ntrain_outputs: %s/training\n' "$DATA" "$DATA" \
     > "$REPO/configs/paths.local.yaml"
