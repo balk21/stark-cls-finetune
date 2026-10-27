@@ -40,7 +40,9 @@ def check_environment(verbose=True) -> dict:
             info["gpu"] = torch.cuda.get_device_name(0)
             info["compute_capability"] = f"{cap[0]}.{cap[1]}"
             arch_list = getattr(torch.cuda, "get_arch_list", lambda: [])()
-            if arch_list and f"sm_{cap[0]}{cap[1]}" not in arch_list:
+            built = [a[3:] for a in arch_list if a.startswith("sm_") and a[3:].isdigit()]
+            # code built for sm_XY also runs on sm_XZ with Z >= Y (sm_86 on an RTX 4080, sm_89)
+            if arch_list and not any(int(b[:-1]) == cap[0] and int(b[-1]) <= cap[1] for b in built):
                 problems.append(f"This PyTorch build was not compiled for {info['gpu']} (sm_{cap[0]}{cap[1]}). "
                                 f"Tested GPUs: {TESTED_GPU_SERIES}")
         else:
