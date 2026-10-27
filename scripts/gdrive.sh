@@ -12,7 +12,7 @@ if ! RCLONE_CONFIG_GDRIVETEST_TYPE=drive RCLONE_CONFIG_GDRIVETEST_SCOPE=drive RC
      rclone lsd gdrivetest: >/dev/null 2>&1; then
   echo "The token does not work; run rclone authorize \"drive\" again and paste the whole {...} line" >&2; exit 1
 fi
-if rclone listremotes | grep -qxF "gdrive:"; then rclone config delete gdrive; fi
+if rclone listremotes 2>/dev/null | grep -qxF "gdrive:"; then rclone config delete gdrive; fi
 CONF=$(rclone config file | tail -1)
 mkdir -p "$(dirname "$CONF")"
 printf '\n[gdrive]\ntype = drive\nscope = drive\ntoken = %s\n' "$TOKEN" >> "$CONF"

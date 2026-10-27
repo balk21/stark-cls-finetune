@@ -28,7 +28,12 @@ for src in "$@"; do
     # Into the archive folder, where prepare-train-data finds it; not again once the train split is extracted
     if [ ! -f "$(train_path train_data)/got10k/train/list.txt" ]; then
       echo "rclone: $src -> $ARCHIVES"
-      rclone copy "$src" "$ARCHIVES" --include "*.{zip,tar,tar.gz,tgz}" --multi-thread-streams 8 -P
+      for try in 1 2 3 4 5; do  # rate limits of rclone's shared Google client ("Quota exceeded ... per minute")
+        rclone copy "$src" "$ARCHIVES" --include "*.{zip,tar,tar.gz,tgz}" --multi-thread-streams 8 -P && break
+        if [ "$try" = 5 ]; then exit 1; fi
+        echo "rclone failed; trying again in 1 minute ($try / 5)" >&2
+        sleep 60
+      done
     fi
   else
     args+=(--got10k-url "$src")
