@@ -17,7 +17,7 @@ def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int
     import numpy as np
 
     from stark_ft.test.evaluation import iou, read_groundtruth
-    from stark_ft.test.tracker_factory import build_tracker
+    from stark_ft.test.tracker_factory import build_tracker, shot_samples
 
     cfg = cfg or ExperimentConfig()
     paths = get_paths()
@@ -25,7 +25,8 @@ def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int
     seq = sequence or (seqs[0] if seqs else vot_data.SMOKE_SEQUENCE)
     vot_data.ensure(vot_data.resolve([seq], paths.dataset), paths.dataset, paths.dataset_cache)
     seq_dir = paths.dataset / seq
-    frames = sorted((seq_dir / "color").glob("*.jpg"))[:n_frames]
+    all_frames = sorted((seq_dir / "color").glob("*.jpg"))
+    frames = all_frames[:n_frames]
     gt = read_groundtruth(seq_dir / "groundtruth.txt")
 
     t0 = time.time()
@@ -37,7 +38,8 @@ def smoke_test(cfg: ExperimentConfig = None, sequence: str = None, n_frames: int
         return cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
 
     t0 = time.time()
-    tracker.initialize(rgb(frames[0]), {"init_bbox": gt[0]})
+    _, shots = shot_samples(cfg, gt, all_frames, rgb)  # ft_shots > 1: more frames with their ground truth
+    tracker.initialize(rgb(frames[0]), {"init_bbox": gt[0], "ft_shots": shots})
     print(f"Initialize ({cfg.ft_mode}) {time.time() - t0:.2f} s")
     ious, confs, t0 = [], [], time.time()
     for i, p in enumerate(frames[1:], 1):

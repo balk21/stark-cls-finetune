@@ -24,6 +24,23 @@ def jitter_box(bbox, rng: np.random.RandomState, center_jitter=4.5, scale_jitter
     return [cx - jw / 2, cy - jh / 2, jw, jh]
 
 
+def shot_frames(gt_boxes, shots: int, seed: int):
+    """Frames (0-based) of the first fine-tuning with ft_shots = `shots` (Talip's k-shot): frame 0 and `shots` - 1
+    frames drawn without replacement from the later frames where the target is visible (gt_boxes[i] is not None),
+    sorted. The same draw as Talip's tracker (np.random.default_rng(seed).choice), so the same seed gives the same
+    frames."""
+    if shots < 1:
+        raise ValueError(f"shots must be >= 1, got {shots}")
+    if shots == 1:
+        return [0]
+    eligible = [i for i in range(1, len(gt_boxes)) if gt_boxes[i] is not None]
+    if len(eligible) < shots - 1:
+        raise ValueError(f"ft_shots={shots} needs {shots - 1} frames with the target visible besides the first; "
+                         f"the sequence has {len(eligible)}")
+    rng = np.random.default_rng(seed)
+    return [0] + sorted(rng.choice(eligible, shots - 1, replace=False).tolist())
+
+
 def _image_coverage(cx, cy, half, img_w, img_h):
     """Fraction of a square crop (centre (cx, cy), half side `half`) that lies inside the image."""
     ix = max(0.0, min(cx + half, img_w) - max(cx - half, 0.0))

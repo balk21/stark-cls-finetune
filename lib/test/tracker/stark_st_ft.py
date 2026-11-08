@@ -7,17 +7,22 @@ Modes (params.ft_mode):
                predicted box; with update_mode='max' this is the selected frame of the interval).
   (In 'none' mode STARK_ST is used directly instead of this class.)
 
+Shots (params.ft_shots, Talip's k-shot): the first fine-tuning uses the first frame and ft_shots - 1 more frames of
+the same video, each with its ground-truth box, in one batch. The caller chooses them (ft_sampling.shot_frames) and
+passes them as info['ft_shots'] = [(image, box), ...] to initialize().
+
 Sample types (params.ft_samples):
   - 'pos'    : positive sample only (label 1).
   - 'posneg' : positive + a negative sample (label 0) from a region of the same frame that does not contain
                the target. The negative generation is provisional; see ft_sampling.negative_search_box.
 
 Flow (each fine-tuning session):
-  1. Determine the positive box (optionally with the ST2 jitter) and, if needed, the negative box.
+  1. For each frame of the session, determine the positive box (optionally with the ST2 jitter) and, if needed,
+     the negative box.
   2. For each box, crop the search region, pass it through backbone + transformer (no_grad) and take the
      decoder output hs (1, 1, 1, 256).
   3. Train only cls_head for `epochs` steps with BCEWithLogitsLoss, AdamW and gradient clipping.
-     (With 1-2 samples, 1 epoch = 1 optimisation step.)
+     (All samples form one batch: 1 epoch = 1 optimisation step.)
 cls_head is reset to the base weights at the start of every video, so nothing leaks between videos.
 """
 import os
@@ -55,9 +60,12 @@ class STARK_ST_FT(STARK_ST):
             raise ValueError(f"invalid ft_mode={params.ft_mode!r}, must be one of {self.FT_MODES}")
         if params.ft_samples not in self.FT_SAMPLES:
             raise ValueError(f"invalid ft_samples={params.ft_samples!r}, must be one of {self.FT_SAMPLES}")
+        if params.ft_shots < 1:
+            raise ValueError(f"invalid ft_shots={params.ft_shots!r}, must be >= 1")
 
         self.ft_mode = params.ft_mode
         self.ft_samples = params.ft_samples
+        self.ft_shots = params.ft_shots
         self.ft_lr = params.ft_lr
         self.ft_weight_decay = params.ft_weight_decay
         self.ft_grad_clip_norm = params.ft_grad_clip_norm
@@ -92,20 +100,24 @@ class STARK_ST_FT(STARK_ST):
                                                                   run_cls_head=False)
         return output_embed.detach()  # (1, 1, 1, 256); gradients only flow through cls_head
 
-    def _finetune_on_frame(self, image, bbox, epochs, session, frame):
-        img_h, img_w = image.shape[:2]
-        if self.ft_pos_jitter:
-            pos_box = jitter_box(bbox, self.rng, self.ft_center_jitter, self.ft_scale_jitter)
-        else:
-            pos_box = list(bbox)
-        hs_list, labels = [self._get_hs(image, pos_box)], [1.0]
+    def _finetune_on_frames(self, frames, epochs, session, frame):
+        """frames: [(image, box), ...] trained on together (one batch); frame: the frame index written to the log."""
+        hs_list, labels, coverages = [], [], []
+        for image, bbox in frames:
+            if self.ft_pos_jitter:
+                pos_box = jitter_box(bbox, self.rng, self.ft_center_jitter, self.ft_scale_jitter)
+            else:
+                pos_box = list(bbox)
+            hs_list.append(self._get_hs(image, pos_box))
+            labels.append(1.0)
+            if self.ft_samples == 'posneg':
+                img_h, img_w = image.shape[:2]
+                neg_box, coverage = negative_search_box(bbox, img_w, img_h, self.params.search_factor)
+                hs_list.append(self._get_hs(image, neg_box))
+                labels.append(0.0)
+                coverages.append(coverage)
 
-        neg_coverage = float('nan')
-        if self.ft_samples == 'posneg':
-            neg_box, neg_coverage = negative_search_box(bbox, img_w, img_h, self.params.search_factor)
-            hs_list.append(self._get_hs(image, neg_box))
-            labels.append(0.0)
-
+        neg_coverage = float(np.mean(coverages)) if coverages else float('nan')
         self._run_finetune(hs_list, labels, epochs, session, neg_coverage, frame)
 
     def _run_finetune(self, hs_list, labels, epochs, session, neg_coverage, frame):
@@ -154,7 +166,12 @@ class STARK_ST_FT(STARK_ST):
                 f.write(FT_LOG_HEADER)
 
         if self.ft_epochs_init > 0:
-            self._finetune_on_frame(image, info['init_bbox'], self.ft_epochs_init, session='init', frame=0)
+            shots = list(info.get('ft_shots', []))
+            if len(shots) != self.ft_shots - 1:
+                raise ValueError(f"ft_shots={self.ft_shots}: initialize() needs {self.ft_shots - 1} more frame(s) in "
+                                 f"info['ft_shots'], got {len(shots)}")
+            self._finetune_on_frames([(image, info['init_bbox'])] + shots, self.ft_epochs_init, session='init',
+                                     frame=0)
 
     def track(self, image, info: dict = None):
         out = super().track(image, info)
@@ -163,7 +180,7 @@ class STARK_ST_FT(STARK_ST):
                 and (self.max_ft_updates < 0 or self.ft_update_count < self.max_ft_updates)):
             # The frame the new template was taken from is treated as reliable; the box is the tracker's own prediction.
             src_frame, _, src_image, src_box = self.template_source
-            self._finetune_on_frame(src_image, src_box, self.ft_epochs_online, session='online', frame=src_frame)
+            self._finetune_on_frames([(src_image, src_box)], self.ft_epochs_online, session='online', frame=src_frame)
             self.ft_update_count += 1
             self.ft_frames.append(src_frame)
             out['ft_updated'] = True

@@ -55,6 +55,7 @@ def build_tracker(cfg: ExperimentConfig, checkpoint: Path, log_dir=None):
     from lib.test.tracker.stark_st_ft import STARK_ST_FT
     params.ft_mode = cfg.ft_mode
     params.ft_samples = cfg.ft_samples
+    params.ft_shots = cfg.shots()
     params.ft_lr = cfg.ft_lr
     params.ft_weight_decay = cfg.ft_weight_decay
     params.ft_grad_clip_norm = cfg.ft_grad_clip_norm
@@ -67,3 +68,21 @@ def build_tracker(cfg: ExperimentConfig, checkpoint: Path, log_dir=None):
     params.seed = cfg.seed
     params.log_dir = None if log_dir is None else str(log_dir)
     return STARK_ST_FT(params)
+
+
+def extra_shot_frames(cfg: ExperimentConfig, gt_boxes) -> list:
+    """ft_shots > 1: the frames (0-based) fine-tuned on together with the first frame, with their ground-truth box;
+    [] otherwise. The analysis leaves the same frames out of the evaluation."""
+    if cfg.shots() <= 1:
+        return []
+    from lib.test.tracker.ft_sampling import shot_frames
+    return shot_frames(gt_boxes, cfg.shots(), cfg.seed)[1:]
+
+
+def shot_samples(cfg: ExperimentConfig, gt_boxes, images, read_rgb):
+    """(frames, [(image, ground-truth box), ...]) of extra_shot_frames(); the samples are info['ft_shots'] of
+    tracker.initialize(). images: the image files of the sequence, read_rgb: reads one as an RGB array."""
+    frames = extra_shot_frames(cfg, gt_boxes)
+    if frames and len(images) != len(gt_boxes):
+        raise ValueError(f"{len(images)} images but {len(gt_boxes)} ground-truth boxes")
+    return frames, [(read_rgb(str(images[i])), list(gt_boxes[i])) for i in frames]

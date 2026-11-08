@@ -63,6 +63,7 @@ class ExperimentConfig:
     # ---- Fine-tuning (STARK-ST only) ----
     ft_mode: str = "online"               # "none" | "init" | "online"
     ft_samples: str = "pos"               # "pos" | "posneg"
+    ft_shots: int = 1                     # 1 = first frame | k: + k-1 random frames with their ground truth (Talip)
     ft_lr: float = 1e-4
     ft_epochs_init: int = 15              # Number of fine-tuning steps on the first frame
     ft_epochs_online: int = 1             # Number of steps in every online fine-tuning session
@@ -114,6 +115,10 @@ class ExperimentConfig:
             errors.append("update_interval must be >= 1 (use 99999 for no updates)")
         if self.ft_epochs_init < 0 or self.ft_epochs_online < 0:
             errors.append("ft_epochs_* cannot be negative")
+        if self.ft_shots < 1:
+            errors.append("ft_shots must be >= 1")
+        elif self.shots() > 1 and not datasets.has_ground_truth(self.dataset):
+            errors.append(f"ft_shots > 1 needs the ground truth of other frames; {self.dataset} has none")
         if self.ft_lr <= 0:
             errors.append("ft_lr must be > 0")
         if not (0 <= self.eval_score_thr <= 1) or not (0 < self.eval_iou_thr <= 1):
@@ -173,9 +178,15 @@ class ExperimentConfig:
             return unused + ft
         if self.ft_mode == "init":  # no fine-tuning at the template updates
             unused += ["ft_epochs_online", "max_ft_updates"]
+        if self.ft_epochs_init == 0:  # no fine-tuning on the first frame
+            unused.append("ft_shots")
         if not self.ft_pos_jitter:
             unused += ["ft_center_jitter", "ft_scale_jitter"]
         return unused
+
+    def shots(self) -> int:
+        """Number of frames of the first fine-tuning: ft_shots where it has an effect, otherwise 1."""
+        return 1 if "ft_shots" in self.unused_fields() else self.ft_shots
 
     def auto_name(self) -> str:
         """Model, mode and every parameter that changes the result and is not at its default value."""
@@ -191,7 +202,8 @@ class ExperimentConfig:
             else:
                 # fine-tuning steps: ep<first frame> (init) | ep<first frame>+<every template update> (online)
                 epochs = f"ep{self.ft_epochs_init}" + (f"+{self.ft_epochs_online}" if self.ft_mode == "online" else "")
-                parts += [self.ft_mode, self.ft_samples, f"lr{self.ft_lr:g}", epochs, interval]
+                shots = [f"{self.ft_shots}shot"] if self.shots() > 1 else []
+                parts += [self.ft_mode, self.ft_samples, *shots, f"lr{self.ft_lr:g}", epochs, interval]
             parts += [f"{tag}{getattr(self, key):g}" for key, tag in NAME_TAGS if key in changed]
             if "ft_pos_jitter" in changed:
                 parts.append("nojit")

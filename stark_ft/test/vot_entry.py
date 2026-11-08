@@ -17,7 +17,8 @@ import cv2
 import torch
 
 from stark_ft.test.config import ExperimentConfig
-from stark_ft.test.tracker_factory import build_tracker
+from stark_ft.test.evaluation import read_groundtruth
+from stark_ft.test.tracker_factory import build_tracker, shot_samples
 from stark_ft.test.vot_trax import VOT, Rectangle
 
 EVENTS_HEADER = "frame,event,conf_score\n"
@@ -52,18 +53,24 @@ def main():
     if not imagefile:
         sys.exit(0)
 
-    seq_name = Path(imagefile).parent.parent.name  # <dataset>/<sequence>/color/00000001.jpg
-    log_dir = out_dir / "tracker_logs" / seq_name
+    seq_dir = Path(imagefile).parent.parent  # <dataset>/<sequence>/color/00000001.jpg
+    log_dir = out_dir / "tracker_logs" / seq_dir.name
     log_dir.mkdir(parents=True, exist_ok=True)
     if hasattr(tracker, "log_dir"):
         tracker.log_dir = str(log_dir)
 
-    init_box = [selection.x, selection.y, selection.width, selection.height]
-    tracker.initialize(_read_rgb(imagefile), {"init_bbox": init_box})
+    info = {"init_bbox": [selection.x, selection.y, selection.width, selection.height]}
+    shot_frames = []
+    if cfg.shots() > 1:  # ft_shots: more frames of this video with their ground-truth box (docs/test.md)
+        images = sorted(Path(imagefile).parent.glob("*" + Path(imagefile).suffix))
+        shot_frames, info["ft_shots"] = shot_samples(cfg, read_groundtruth(seq_dir / "groundtruth.txt"), images,
+                                                     _read_rgb)
+    tracker.initialize(_read_rgb(imagefile), info)
 
     frame_idx = 0
     with open(log_dir / "events.txt", "w") as events:
         events.write(EVENTS_HEADER)
+        events.writelines(f"{i},ft_shot,nan\n" for i in shot_frames)
         while True:
             imagefile = handle.frame()
             if not imagefile:

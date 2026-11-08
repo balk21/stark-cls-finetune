@@ -45,8 +45,8 @@ def test_coercion_and_errors():
 OTHER_VALUE = {
     "model": "stark_s", "model_config": "baseline", "weights": "st101_coco_stage2", "dataset": "got10k_val",
     "sequences": ["ballet"], "update_mode": "stark", "update_interval": 200, "update_conf_thr": 0.8,
-    "update_iou_thr": 0.7, "max_template_updates": 3, "ft_mode": "init", "ft_samples": "posneg", "ft_lr": 1e-5,
-    "ft_epochs_init": 5, "ft_epochs_online": 5, "ft_weight_decay": 0.0, "ft_grad_clip_norm": 1.0,
+    "update_iou_thr": 0.7, "max_template_updates": 3, "ft_mode": "init", "ft_samples": "posneg", "ft_shots": 5,
+    "ft_lr": 1e-5, "ft_epochs_init": 5, "ft_epochs_online": 5, "ft_weight_decay": 0.0, "ft_grad_clip_norm": 1.0,
     "ft_pos_jitter": False, "ft_center_jitter": 3.0, "ft_scale_jitter": 0.25, "max_ft_updates": 2, "seed": 1,
     "run_redetection": True,
 }

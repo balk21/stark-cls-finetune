@@ -5,7 +5,8 @@ Metric families:
   1. COCO mAP / AP50 / AP75 (pycocotools) — the primary metrics
        - mAP is COCO's main "AP": precision averaged over recall and over the IoU thresholds
          0.50:0.05:0.95. AP50 / AP75 use a single IoU threshold (0.50 / 0.75).
-       - The frames after the first (init) frame in which the target is visible are evaluated.
+       - The frames after the first (init) frame in which the target is visible are evaluated (with ft_shots > 1
+         without the other frames the tracker was fine-tuned on with their ground truth: `exclude`).
        - Predictions with a score below the score threshold (eval_score_thr) are not counted.
        - Coordinates are rounded to integers.
   2. "Found / not found" metrics at a fixed threshold (eval_score_thr, eval_iou_thr):
@@ -112,14 +113,15 @@ def _clip_box(b, w, h):
     return [x, y, min(max(b[2], 0.0), w - x), min(max(b[3], 0.0), h - y)]
 
 
-def got10k_ious(gt_boxes, boxes, size):
+def got10k_ious(gt_boxes, boxes, size, exclude=()):
     """IoUs as the GOT-10k toolkit computes them (ExperimentGOT10k / rect_iou with bound): the frames after the first
-    where the target is visible, boxes clipped to the image (size = (width, height))."""
+    where the target is visible, boxes clipped to the image (size = (width, height)). exclude: frames left out."""
     eps = np.finfo(float).eps
     w, h = size
+    skip = set(exclude)
     out = []
-    for g, p in zip(gt_boxes[1:], boxes[1:]):
-        if g is None:
+    for i, (g, p) in enumerate(zip(gt_boxes, boxes)):
+        if i == 0 or i in skip or g is None:
             continue
         if p is None:
             out.append(0.0)
@@ -263,17 +265,19 @@ def f_curve_from_sequences(seq_records, iou_thr, resolution=100):
 
 
 # ------------------------------------------------------------------ sequence level
-def evaluate_sequence(gt_boxes, pred_boxes, scores, score_thr, iou_thr, img_id_offset=0):
-    """Returns all metrics and the per-frame records for one sequence."""
+def evaluate_sequence(gt_boxes, pred_boxes, scores, score_thr, iou_thr, img_id_offset=0, exclude=()):
+    """Returns all metrics and the per-frame records for one sequence. The first frame and the frames in `exclude`
+    are not evaluated."""
     n = len(gt_boxes)
     pred_boxes = list(pred_boxes) + [None] * (n - len(pred_boxes))
     scores = list(scores) + [float("nan")] * (n - len(scores))
-    records = [(img_id_offset + i, gt_boxes[i], pred_boxes[i], scores[i]) for i in range(1, n)]
+    skip = set(exclude)
+    records = [(img_id_offset + i, gt_boxes[i], pred_boxes[i], scores[i]) for i in range(1, n) if i not in skip]
 
     visible_ious = [iou(g, p) for _, g, p, _ in records if g is not None]
     visible_ious = [v if np.isfinite(v) else 0.0 for v in visible_ious]
     metrics = {
-        "frames": n - 1,
+        "frames": len(records),
         "visible_frames": sum(1 for r in records if r[1] is not None),
         "absent_frames": sum(1 for r in records if r[1] is None),
         "mean_iou_visible": float(np.mean(visible_ious)) if visible_ious else float("nan"),

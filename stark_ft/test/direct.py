@@ -20,7 +20,7 @@ import torch
 
 from stark_ft import got10k
 from stark_ft.test.config import ExperimentConfig
-from stark_ft.test.tracker_factory import build_tracker
+from stark_ft.test.tracker_factory import build_tracker, shot_samples
 
 EVENTS_HEADER = "frame,event,conf_score\n"
 SUBMISSION = "got10k_submission.zip"
@@ -58,14 +58,17 @@ def run_sequences(cfg: ExperimentConfig, out_dir: Path, dataset_dir: Path, seque
         try:
             if tracker is None:
                 tracker = build_tracker(cfg, checkpoint)
-            images, _, _, init_box = got10k.read_sequence(dataset_dir, seq)
+            images, gt, _, init_box = got10k.read_sequence(dataset_dir, seq)
             log_dir = out_dir / "tracker_logs" / seq
             log_dir.mkdir(parents=True, exist_ok=True)
             if hasattr(tracker, "log_dir"):
                 tracker.log_dir = str(log_dir)
             t0 = time.perf_counter()
-            tracker.initialize(_rgb(images[0]), {"init_bbox": init_box})
-            times, boxes, confs, events = [time.perf_counter() - t0], [], [], [EVENTS_HEADER]
+            # ft_shots > 1: more frames of this video with their ground-truth box (docs/test.md)
+            shot_frames, shots = shot_samples(cfg, gt, images, _rgb)
+            tracker.initialize(_rgb(images[0]), {"init_bbox": init_box, "ft_shots": shots})
+            times, boxes, confs = [time.perf_counter() - t0], [], []
+            events = [EVENTS_HEADER] + [f"{i},ft_shot,nan\n" for i in shot_frames]
             for k, path in enumerate(images[1:], 1):
                 image = _rgb(path)
                 t0 = time.perf_counter()

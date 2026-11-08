@@ -55,6 +55,11 @@ kare + hedef kutusu
 | `pos` | yalnızca pozitif |
 | `posneg` | pozitif + aynı karenin bir negatif bölgesi; hedefin arama kırpmasının tamamen dışında kalacak şekilde kaydırılır (8 yön denenir; görüntünün en çok içinde kalan kullanılır). Daha iyi bir negatif örnekleme bulunana kadar geçicidir. |
 
+| `ft_shots` | İlk fine-tune'un kareleri |
+|---|---|
+| `1` | ilk kare (tracker, VOT-LT protokolündeki gibi yalnızca ilk karenin kutusunu bilir) |
+| `k > 1` | Talip'in k-shot'ı: ilk kare + aynı videonun hedefin göründüğü karelerinden `seed` ile rastgele seçilen `k−1` kare, her biri kendi ground-truth kutusuyla, tek batch'te. Bu kareler değerlendirilmez; `events.txt` bunları listeler (`ft_shot`). |
+
 ## Çalıştırma
 
 ```bash
@@ -64,6 +69,9 @@ python -m stark_ft smoke --frames 50                                   # isteğe
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # sade STARK-ST, resmi ağırlıklar
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<koşu adı>   # stark_ft train ile eğitilmiş bir model
+# Talip'in 5-shot'ı: ilk kare + ground truth'larıyla 4 rastgele kare, jitter'sız kutu, template update yok
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=init --set ft_shots=5 --set ft_pos_jitter=false \
+    --set update_interval=99999 --set seed=42
 # STARK'ın yalnızca GOT-10k ağırlıkları: GOT-10k val'in tamamında / GOT-10k test bölümünde / VOT-LT2020'de
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
     --set ft_mode=none --set update_interval=200
@@ -121,6 +129,7 @@ GOT-10k'da hem VOT-LT2020'de test edilebilirler. STARK GOT-10k'da
 | Yalnızca ilk karede fine-tune | `ft_mode="init"` |
 | İlk karede ve her template update'te fine-tune | `ft_mode="online"` |
 | Yalnızca pozitif / pozitif + negatif örnekler | `ft_samples="pos"` / `"posneg"` |
+| Videonun daha fazla karesiyle fine-tune (Talip'in k-shot'ı) | `ft_shots=5` / `10` (Talip'teki gibi: `ft_mode="init"`, `ft_pos_jitter=False`, `update_interval=99999`, `seed=42`) |
 | Fine-tune'un gücü | `ft_lr`, `ft_epochs_init` (1. karedeki adım), `ft_epochs_online` (update başına adım) |
 | Her N karenin en iyi karesiyle template update | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
@@ -183,7 +192,7 @@ ve/veya `--set anahtar=değer`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
-| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: modelden, moddan ve sonucu değiştiren, varsayılan değerinde olmayan her parametreden üretilir, örn. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: ilk karedeki + her template update'teki fine-tune adımı; `init`: `ep15`; `update_mode="max"` ile `max100`, `seed=1` ile `_s1`, `ft_weight_decay=0` ile `_wd0`). Diğer ayarlarla etkisi olmayan parametreler (örn. `ft_mode="init"` iken `ft_epochs_online`) adda yer almaz ve devam etmeyi engellemez; `show` / `nb.describe` bunları işaretler. |
+| `name` | `None` | Çıktı klasörü `<outputs>/<name>/`. `None`: modelden, moddan ve sonucu değiştiren, varsayılan değerinde olmayan her parametreden üretilir, örn. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: ilk karedeki + her template update'teki fine-tune adımı; `init`: `ep15`; `update_mode="max"` ile `max100`, `ft_shots=5` ile `5shot`, `seed=1` ile `_s1`, `ft_weight_decay=0` ile `_wd0`). Diğer ayarlarla etkisi olmayan parametreler (örn. `ft_mode="init"` iken `ft_epochs_online`) adda yer almaz ve devam etmeyi engellemez; `show` / `nb.describe` bunları işaretler. |
 | `model` | `"stark_st"` | `"stark_st"` veya `"stark_s"` (skor yok; 1.0 raporlar; `ft_mode="none"` gerekir). |
 | `model_config` | `"baseline_R101"` | `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) veya `model_configs/stark_s/` altındaki YAML. |
 | `weights` | `"official"` | `"official"`, burada eğitilmiş bir aşama-2 koşusu ya da bir checkpoint dosyası / yolu (bkz. [Ağırlıklar](#ağırlıklar)). (Eski adı: `checkpoint`.) |
@@ -196,6 +205,7 @@ ve/veya `--set anahtar=değer`.
 | `max_template_updates` | `-1` | Dizi başına; `-1` = sınırsız. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (bkz. [Yöntem](#yöntem)). |
 | `ft_samples` | `"pos"` | `"pos"` veya `"posneg"`. |
+| `ft_shots` | `1` | İlk fine-tune'un kareleri: `1` = ilk kare; `k` = + videonun ground truth'larıyla `k−1` rastgele karesi (Talip'in k-shot'ı, bkz. [Yöntem](#yöntem)); bu kareler değerlendirilmez. `got10k_test`'te kullanılamaz. |
 | `ft_lr` | `1e-4` | AdamW öğrenme oranı (aşama-2 eğitimi: 1e-4). |
 | `ft_epochs_init` | `15` | İlk karedeki adım sayısı; `0` = yok. |
 | `ft_epochs_online` | `1` | Online fine-tune başına adım. |
@@ -224,7 +234,7 @@ ve/veya `--set anahtar=değer`.
 | `predictions/<dizi>/<dizi>_001_confidence.value`, `_time.value` | Kare başına skor ve süre |
 | `predictions/<dizi>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<dizi>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (adım başına bir satır; olasılıklar güncellemeden önce) |
-| `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): template'in alındığı kare ve skoru |
+| `tracker_logs/<dizi>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): template'in alındığı kare ve skoru; `ft_shot`: `ft_shots`'un diğer kareleri |
 | `boxes/<dizi>/` | `draw` / `draw.ipynb`: ground-truth kutusu yeşil, tahmin kutusu kırmızı (1 piksel), sol üstte kare numarası, IoU ve skor; seçilen kareler (`--frames all`: tüm kareler) `<dizi>_<kare>.jpg` (renk alt örneklemesiz JPEG, 1 piksellik çizgiler rengini korur; kare başına ≈ 50–300 KB), tüm kareler `<dizi>.mp4` (ffmpeg kurulu yerlerde, örn. Colab, H.264) |
 | `plots/<dizi>/iou_conf.png` | Kareye göre IoU ve skor (gri: hedef yok; kırmızı: template update; yeşil: fine-tune; siyah: sabit eşik; mor: F-maksimum eşik) |
 | `plots/<dizi>/finetune_loss.png` | Adım başına loss ve pozitif / negatif olasılıklar |
@@ -233,7 +243,8 @@ ve/veya `--set anahtar=değer`.
 | `vot_workspace/` | Deneyin kendi VOT workspace'i (ham `results/`; yalnızca VOT-LT2020) |
 | `got10k_submission.zip` | GOT-10k test bölümü: GOT-10k sunucusu için her dizinin `<dizi>/<dizi>_001.txt` ve `<dizi>/<dizi>_time.txt` dosyaları |
 
-Kare 0 ilk (init) karedir (VOT dosyalarında satır numarası − 1); değerlendirilmez.
+Kare 0 ilk (init) karedir (VOT dosyalarında satır numarası − 1); değerlendirilmez. `ft_shots` > 1 iken diğer
+fine-tune kareleri de değerlendirilmez.
 
 ## Metrikler
 
@@ -281,6 +292,10 @@ detection metriklerinde "hedef yok" olarak sayılır.
 - **`online` tracker'ın kendi tahminiyle eğitir** ve update kararı da fine-tune edilen başlıktan gelir: kendini
   doğrulayan bir döngü riski vardır.
 - **`ft_lr` / `ft_epochs_*` deneyseldir.** Bunları test dizilerinde seçmek sonuçları iyimser gösterir.
+- **`ft_shots` > 1 sonraki karelerin ground truth'unu kullanır.** VOT-LT ve GOT-10k protokolleri tracker'a yalnızca ilk
+  karenin kutusunu verir; bu yüzden bu sonuçlar yayımlanmış sonuçlarla karşılaştırılamaz.
+- **Template update yokken (`update_interval=99999`) fine-tune yalnızca skoru değiştirir, kutuyu hiç değiştirmez**:
+  cls_head kutu tahminine katılmaz.
 - vot-toolkit her dizide tracker sürecini yeniden başlatır (model yeniden yüklenir, ~3–4 sn).
 
 ## GPU'lar arası sonuçlar
@@ -307,7 +322,7 @@ aynı GPU tipinde çalıştırın ve GPU'yu raporlayın.**
 |---|---|---|
 | 1 | `STARK_FT_MODE=all` tanımsızdı; bu yüzden "online" deneylerde online fine-tune hiç çalışmadı | `ft_mode` = `none / init / online`; geçersiz değer hata verir |
 | 2 | Negatif bölge `2·max(w,h)` kaydırılıyordu; en-boy oranı ≈ 1.56'nın altındaki hedeflerde negatif kırpma hedefi içeriyordu | Kaydırma kırpma boyutundan hesaplanır; 20 000 rastgele durumda test edildi |
-| 3 | Test dizisinin tüm ground truth'u tracker'a veriliyordu (test etiketi sızıntısı) | Kaldırıldı; tracker yalnızca ilk karenin kutusunu görür |
+| 3 | Test dizisinin tüm ground truth'u tracker'a veriliyordu (test etiketi sızıntısı) | Kaldırıldı; tracker yalnızca ilk karenin kutusunu görür (`ft_shots` > 1 iken bilerek seçilen karelerin kutularını da görür; bu kareler değerlendirilmez) |
 | 4 | Sabit seed yoktu | `seed`; birebir tekrarlanabilir |
 | 5 | Görüntüler `tolist()` ile tensöre çevriliyordu (yavaş) | Orijinal STARK sürümü |
 | 6 | `redetection` deneyi her zaman çalışıyordu (~2× süre) | Varsayılan olarak yalnızca `longterm` |

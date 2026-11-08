@@ -16,6 +16,7 @@ from stark_ft.test.evaluation import (coco_ap, evaluate_sequence, f_curve_from_s
                                       iou, operating_point, read_vot_result)
 from stark_ft.paths import Paths, get_paths
 from stark_ft.test.plots import plot_f_curve, plot_finetune_loss, plot_iou_conf
+from stark_ft.test.tracker_factory import extra_shot_frames
 
 # Order of the summary tables: the primary metrics (mAP / AP50 / AP75) first
 SUMMARY_METRICS = ["mAP", "AP50", "AP75", "precision_opt", "recall_opt", "F_opt", "precision", "recall", "F1",
@@ -104,9 +105,12 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         frames = build_frame_table(gt_boxes, boxes, scores, times)
         frames.to_csv(pred_dir / "frames.csv", index=False, float_format="%.6f")
 
-        metrics, records = evaluate_sequence(gt_boxes, boxes, scores, score_thr, iou_thr, img_id_offset=offset)
+        # ft_shots > 1: the frames the tracker was fine-tuned on with their ground truth are not evaluated
+        shots = extra_shot_frames(cfg, gt_boxes)
+        metrics, records = evaluate_sequence(gt_boxes, boxes, scores, score_thr, iou_thr, img_id_offset=offset,
+                                             exclude=shots)
         if is_got10k:
-            seq_ious = got10k_ious(gt_boxes, boxes, image_size)
+            seq_ious = got10k_ious(gt_boxes, boxes, image_size, exclude=shots)
             got10k_pooled.append(seq_ious)
             metrics.update(got10k_metrics(seq_ious))
         offset += len(gt_boxes) + 1

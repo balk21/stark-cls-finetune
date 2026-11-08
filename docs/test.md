@@ -54,6 +54,11 @@ frame + target box
 | `pos` | positive only |
 | `posneg` | positive + a negative region of the same frame, shifted so that it lies completely outside the target's search crop (8 directions tried; the one most inside the image is used). Provisional until a better negative sampling is found. |
 
+| `ft_shots` | Frames of the first fine-tuning |
+|---|---|
+| `1` | the first frame (the tracker knows only the first frame's box, as in the VOT-LT protocol) |
+| `k > 1` | Talip's k-shot: the first frame + `k−1` frames of the same video where the target is visible, drawn at random with `seed`, each with its ground-truth box, in one batch. These frames are not evaluated; `events.txt` lists them (`ft_shot`). |
+
 ## Running
 
 ```bash
@@ -63,6 +68,9 @@ python -m stark_ft smoke --frames 50                                   # optiona
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # plain STARK-ST, official weights
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<run name>   # a model trained with stark_ft train
+# Talip's 5-shot: first frame + 4 random frames with their ground truth, exact box, no template update
+python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=init --set ft_shots=5 --set ft_pos_jitter=false \
+    --set update_interval=99999 --set seed=42
 # STARK's GOT-10k-only weights on all GOT-10k val sequences / on the GOT-10k test split / on VOT-LT2020
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set dataset=got10k_val --set sequences=all \
     --set ft_mode=none --set update_interval=200
@@ -120,6 +128,7 @@ STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
 | Fine-tuning on the first frame only | `ft_mode="init"` |
 | Fine-tuning on the first frame and at every template update | `ft_mode="online"` |
 | Positive samples only / positive + negative | `ft_samples="pos"` / `"posneg"` |
+| Fine-tuning on more frames of the video (Talip's k-shot) | `ft_shots=5` / `10` (as Talip: `ft_mode="init"`, `ft_pos_jitter=False`, `update_interval=99999`, `seed=42`) |
 | Strength of the fine-tuning | `ft_lr`, `ft_epochs_init` (steps on frame 1), `ft_epochs_online` (steps per update) |
 | Template update with the best frame of every N frames | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Sequences | `sequences=["bull", "ballet"]` or `"all"` |
@@ -181,7 +190,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 
 | Parameter | Default | Description |
 |---|---|---|
-| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated from the model, the mode and every parameter that changes the result and is not at its default, e.g. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: fine-tuning steps on the first frame + at every template update; `init`: `ep15`; `max100` with `update_mode="max"`, `_s1` with `seed=1`, `_wd0` with `ft_weight_decay=0`). Parameters that have no effect with the other settings (e.g. `ft_epochs_online` with `ft_mode="init"`) are not in the name and do not prevent resuming; `show` / `nb.describe` marks them. |
+| `name` | `None` | Output folder `<outputs>/<name>/`. `None`: generated from the model, the mode and every parameter that changes the result and is not at its default, e.g. `st101_online_pos_lr0.0001_ep15+1_int100` (`ep15+1`: fine-tuning steps on the first frame + at every template update; `init`: `ep15`; `max100` with `update_mode="max"`, `5shot` with `ft_shots=5`, `_s1` with `seed=1`, `_wd0` with `ft_weight_decay=0`). Parameters that have no effect with the other settings (e.g. `ft_epochs_online` with `ft_mode="init"`) are not in the name and do not prevent resuming; `show` / `nb.describe` marks them. |
 | `model` | `"stark_st"` | `"stark_st"` or `"stark_s"` (no score; reports 1.0; needs `ft_mode="none"`). |
 | `model_config` | `"baseline_R101"` | YAML in `model_configs/stark_st2/` (`baseline_R101`, `baseline`, `*_got10k_only`) or `model_configs/stark_s/`. |
 | `weights` | `"official"` | `"official"`, a stage-2 run trained here, or a checkpoint file / path (see [Weights](#weights)). (Earlier name: `checkpoint`.) |
@@ -194,6 +203,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `max_template_updates` | `-1` | Per sequence; `-1` = unlimited. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (see [Method](#method)). |
 | `ft_samples` | `"pos"` | `"pos"` or `"posneg"`. |
+| `ft_shots` | `1` | Frames of the first fine-tuning: `1` = the first frame; `k` = + `k−1` random frames of the video with their ground truth (Talip's k-shot, see [Method](#method)); these frames are not evaluated. Not on `got10k_test`. |
 | `ft_lr` | `1e-4` | AdamW learning rate (stage-2 training: 1e-4). |
 | `ft_epochs_init` | `15` | Steps on the first frame; `0` = none. |
 | `ft_epochs_online` | `1` | Steps per online fine-tuning. |
@@ -222,7 +232,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `predictions/<seq>/<seq>_001_confidence.value`, `_time.value` | Score and time per frame |
 | `predictions/<seq>/frames.csv` | `frame, x, y, w, h, conf, time, gt_visible, gt_x, gt_y, gt_w, gt_h, iou` |
 | `tracker_logs/<seq>/finetune_loss.txt` | `frame, session, epoch, loss, pos_prob, neg_prob, n_pos, n_neg, neg_coverage` (one row per step; probabilities before the update) |
-| `tracker_logs/<seq>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): the frame the template was taken from and its score |
+| `tracker_logs/<seq>/events.txt` | `frame, event, conf_score` (`template_update`, `ft_update`): the frame the template was taken from and its score; `ft_shot`: the other frames of `ft_shots` |
 | `boxes/<seq>/` | `draw` / `draw.ipynb`: ground-truth box green, predicted box red (1 pixel), frame number, IoU and score top left; the chosen frames (`--frames all`: every frame) as `<seq>_<frame>.jpg` (JPEG without chroma subsampling, so the 1-pixel lines keep their colour; ≈ 50–300 KB per frame), every frame as `<seq>.mp4` (H.264 where ffmpeg is installed, e.g. Colab) |
 | `plots/<seq>/iou_conf.png` | IoU and score vs. frame (grey: target absent; red: template update; green: fine-tuning; black: fixed threshold; purple: F-max threshold) |
 | `plots/<seq>/finetune_loss.png` | Loss and positive / negative probabilities per step |
@@ -231,7 +241,8 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `vot_workspace/` | The experiment's own VOT workspace (raw `results/`; VOT-LT2020 only) |
 | `got10k_submission.zip` | GOT-10k test split: `<seq>/<seq>_001.txt` and `<seq>/<seq>_time.txt` of every sequence, for the GOT-10k server |
 
-Frame 0 is the first (init) frame (= line number − 1 in the VOT files); it is not evaluated.
+Frame 0 is the first (init) frame (= line number − 1 in the VOT files); it is not evaluated, nor are the other frames
+of `ft_shots` > 1.
 
 ## Metrics
 
@@ -279,6 +290,10 @@ a visible target are treated as "target absent" in the detection metrics above.
 - **`online` trains on the tracker's own prediction**, and the update decision comes from the head being fine-tuned:
   a possible self-reinforcing loop.
 - **`ft_lr` / `ft_epochs_*` are empirical.** Choosing them on the test sequences makes results optimistic.
+- **`ft_shots` > 1 uses the ground truth of later frames.** The VOT-LT and GOT-10k protocols give the tracker only the
+  first frame's box, so these results are not comparable with published ones.
+- **Without template updates (`update_interval=99999`) fine-tuning changes only the score, never the box**: cls_head
+  does not take part in the box prediction.
 - vot-toolkit restarts the tracker process (and reloads the model, ~3–4 s) for every sequence.
 
 ## Results across GPUs
@@ -305,7 +320,7 @@ the same GPU type and report it.**
 |---|---|---|
 | 1 | `STARK_FT_MODE=all` was undefined, so online fine-tuning never ran in the "online" experiments | `ft_mode` = `none / init / online`; invalid values raise an error |
 | 2 | The negative region was shifted by `2·max(w,h)`; for aspect ratios below ≈ 1.56 the negative crop contained the target | Shift computed from the crop size; tested on 20 000 random cases |
-| 3 | The full ground truth of the test sequence was passed to the tracker (test label leakage) | Removed; the tracker only sees the first-frame box |
+| 3 | The full ground truth of the test sequence was passed to the tracker (test label leakage) | Removed; the tracker only sees the first-frame box (with `ft_shots` > 1 also the boxes of the chosen frames, on purpose; they are not evaluated) |
 | 4 | No fixed seed | `seed`; exactly reproducible |
 | 5 | Images were converted to tensors via `tolist()` (slow) | Original STARK version |
 | 6 | The `redetection` experiment always ran (~2× time) | Only `longterm` by default |
