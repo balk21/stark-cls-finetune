@@ -80,15 +80,22 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<deney> --score-thr 0.5             # tracking olmadan metrikleri yeniden hesaplar
 python -m stark_ft compare <deney 1> <deney 2> --out comparison.xlsx --plot comparison.png  # xlsx: aşağıya bakın
+python -m stark_ft compare <deney 1> <deney 2> --latex table.tex --label '<deney 1>=<satır adı>' \
+    --group-names "obje var" "obje yok"                                # dizi gruplarına göre LaTeX satırları (aşağıda)
 python -m stark_ft draw <deney> --sequence bull --frames 1 100 500   # karelerin üzerine kutular + video (Çıktılar)
 ```
 
 `comparison.xlsx`: `summary` sayfasında deney başına bir satır (verilen sırayla): `experiment`, `lr`, `epoch` (ilk
 karedeki + her template update'teki fine-tune adımı: online `15+15`, init `15+0`, none `0+0`), `sequence`, `method`
 (`orj` = STARK'ın template update'i, `max`, `noupd`), `mAP`, `AP50`, `AP75` (dizilerin düz ortalaması) ve
-`mAP weighted`, `AP50 weighted`, `AP75 weighted` (dizilerin kare sayısıyla ağırlıklı ortalaması). Deneylerde birden
+`mAP weighted`, `AP50 weighted`, `AP75 weighted` (her videonun kare sayısıyla ağırlıklı ortalama). Deneylerde birden
 fazla dizi varsa her deneyin ayrıca kendi sayfası olur: dizi başına bir satır ve son iki satırda iki ortalama (`mean`,
-`weighted mean`).
+`weighted mean`). `groups` sayfasında da her deney için üç satır olur: `all` (tüm diziler), `visible` (hedef her
+karede görünür: VOT-LT2020'nin 50 dizisinden 12'si) ve `absent` (hedef bazı karelerde yok: 38 dizi); her birinde
+`FT`, `TU`, video sayısı ve % olarak mAP / AP50 / AP75'in düz ve ağırlıklı ortalaması vardır. `--latex table.tex`
+(notebook'ta `latex_name`) bunları `ad & FT & TU & mAP & AP50 & AP75 \\` biçiminde LaTeX satırları olarak yazar
+(`\checkmark` / `--`): önce düz, sonra ağırlıklı ortalamalar. `--label` bir satıra ad verir (varsayılan: deneyin
+adı), `--group-names` iki grubun adını belirler.
 
 Notebook'lar: `notebooks/test.ipynb`, `notebooks/compare.ipynb`, `notebooks/draw.ipynb` (karelerin üzerine kutular). 50 dizinin tamamı (≈ 215 bin kare) RTX 3060 laptop
 GPU'da ≈ 2 saat sürer.

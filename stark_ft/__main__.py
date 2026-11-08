@@ -17,7 +17,7 @@ Test
     python -m stark_ft test [--config configs/test_example.yaml] [--set key=value ...] [--overwrite] [--no-analyze]
     python -m stark_ft analyze outputs/<experiment> [--score-thr 0.35] [--iou-thr 0.5] [--thr-resolution 100]
     python -m stark_ft list
-    python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png]
+    python -m stark_ft compare <exp1> <exp2> ... [--out comparison.xlsx] [--plot comparison.png] [--latex table.tex]
     python -m stark_ft draw <experiment> --sequence bull [--frames 1 100 500 | all] [--no-video]
 """
 import argparse
@@ -213,8 +213,19 @@ def cmd_compare(args):
             print(f"\n== {metric} per sequence (reference: {names[0]}, difference = experiment - reference) ==")
             diff = table.sub(table[names[0]], axis=0).drop(columns=names[0])
             print(pd.concat([table[[names[0]]], diff.add_prefix("Δ ")], axis=1).to_string(float_format=fmt))
+    groups = compare.group_table(names)
+    if (groups["videos"] > 1).any():
+        print("\n== mAP / AP50 / AP75 in % per sequence group: all / target visible in every frame (visible) / target "
+              "absent in some frames (absent); plain mean and mean weighted by the video length ==")
+        print(groups.to_string(index=False, float_format=lambda v: f"{v:.2f}"))
     if args.out:
         print(f"\nExcel: {compare.export_comparison(names, args.out)}")
+    if args.latex:
+        bad = [item for item in args.label if "=" not in item]
+        if bad:
+            raise SystemExit(f"--label needs NAME=TEXT, got {bad}")
+        labels = dict(item.split("=", 1) for item in args.label)
+        print(f"LaTeX: {compare.export_latex(names, args.latex, labels, tuple(args.group_names))}")
     if args.plot:
         df = compare.load_summaries(names, "mean_over_sequences")
         plot_metric_comparison(df, ["mAP", "AP50", "AP75", "F_opt", "absent_reject_rate"], args.plot)
@@ -286,6 +297,13 @@ def main(argv=None):
     p.add_argument("--out", help="Excel output (.xlsx): lr, epoch, sequence, method, mAP / AP50 / AP75 per experiment "
                                  "(several sequences: also one sheet per experiment with their mean)")
     p.add_argument("--plot", help="Bar chart (.png)")
+    p.add_argument("--latex", help="LaTeX rows (.tex): FT, TU, mAP / AP50 / AP75 in %% per experiment for all sequences "
+                                   "/ target visible in every frame / target absent in some frames; plain and "
+                                   "video-length-weighted means")
+    p.add_argument("--label", action="append", default=[], metavar="NAME=TEXT",
+                   help="--latex: row name of an experiment (default: the experiment name); can be repeated")
+    p.add_argument("--group-names", nargs=2, default=["target visible", "target absent"], metavar=("VISIBLE", "ABSENT"),
+                   help="--latex: added to the row names of the two groups")
     args = parser.parse_args(argv)
 
     # shared

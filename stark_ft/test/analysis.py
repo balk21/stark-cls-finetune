@@ -120,6 +120,7 @@ def analyze_experiment(out_dir, paths: Paths = None, score_thr: float = None, io
         log_dir = out_dir / "tracker_logs" / seq
         events = _read_csv(log_dir / "events.txt", ["frame", "event", "conf_score"])
         ft = _read_csv(log_dir / "finetune_loss.txt", ["frame", "session", "epoch", "loss", "pos_prob", "neg_prob"])
+        metrics["video_frames"] = len(gt_boxes)  # length of the video (weights of the weighted means in compare.py)
         metrics["template_updates"] = int((events["event"] == "template_update").sum()) if len(events) else 0
         metrics["ft_updates"] = int((events["event"] == "ft_update").sum()) if len(events) else 0
         metrics["mean_time_ms"] = float(np.nanmean(frames["time"].to_numpy()[1:]) * 1000) if len(frames) > 1 else np.nan

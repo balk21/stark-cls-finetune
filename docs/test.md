@@ -79,15 +79,22 @@ python -m stark_ft test --set model_config=baseline_R101_got10k_only --set datas
 python -m stark_ft test --set model_config=baseline_R101_got10k_only --set 'sequences=[bull]' --set ft_mode=none
 python -m stark_ft analyze outputs/<experiment> --score-thr 0.5        # metrics again, without tracking
 python -m stark_ft compare <experiment 1> <experiment 2> --out comparison.xlsx --plot comparison.png  # xlsx: see below
+python -m stark_ft compare <experiment 1> <experiment 2> --latex table.tex --label '<experiment 1>=<row name>' \
+    --group-names "obje var" "obje yok"                                # LaTeX rows per sequence group (below)
 python -m stark_ft draw <experiment> --sequence bull --frames 1 100 500   # boxes on the frames + video (Outputs)
 ```
 
 `comparison.xlsx`: sheet `summary` with one row per experiment (in the given order): `experiment`, `lr`, `epoch`
 (fine-tuning steps on the first frame + at every template update: `15+15` online, `15+0` init, `0+0` none), `sequence`,
 `method` (`orj` = STARK's template update, `max`, `noupd`), `mAP`, `AP50`, `AP75` (plain mean over the sequences) and
-`mAP weighted`, `AP50 weighted`, `AP75 weighted` (mean weighted by the number of frames of each sequence). If the
+`mAP weighted`, `AP50 weighted`, `AP75 weighted` (mean weighted by the length of each video in frames). If the
 experiments have several sequences, every experiment also gets its own sheet with one row per sequence and the two
-means in the last two rows (`mean`, `weighted mean`).
+means in the last two rows (`mean`, `weighted mean`), and sheet `groups` has three rows per experiment: `all`
+sequences, `visible` (the target is visible in every frame: 12 of the 50 VOT-LT2020 sequences) and `absent` (the target
+is absent in some frames: 38), each with `FT`, `TU`, the number of videos and mAP / AP50 / AP75 in % as the plain and
+the weighted mean. `--latex table.tex` (notebook: `latex_name`) writes them as LaTeX rows
+`name & FT & TU & mAP & AP50 & AP75 \\` (`\checkmark` / `--`), first with the plain means, then with the weighted
+means; `--label` names a row (default: the experiment name), `--group-names` the two groups.
 
 Notebooks: `notebooks/test.ipynb`, `notebooks/compare.ipynb`, `notebooks/draw.ipynb` (boxes on the frames). All 50 sequences (≈ 215 k frames) take ≈ 2 h on an
 RTX 3060 laptop GPU.

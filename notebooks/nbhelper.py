@@ -304,7 +304,9 @@ def list_outputs():
     return sorted(p.name for p in root.iterdir() if (p / "metrics" / "metrics.json").is_file())
 
 
-def compare(names, excel_name=None, plot_name=None):
+def compare(names, excel_name=None, plot_name=None, latex_name=None, labels=None, group_names=None):
+    """Comparison in <outputs>/_comparisons/. latex_name: LaTeX rows per sequence group (labels: {experiment: row
+    name}; group_names: (visible, absent) added to the row names of the two groups)."""
     from IPython.display import Image, display
     out_dir = outputs_dir() / "_comparisons"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -313,9 +315,17 @@ def compare(names, excel_name=None, plot_name=None):
         args += ["--out", out_dir / excel_name]
     if plot_name:
         args += ["--plot", out_dir / plot_name]
+    if latex_name:
+        args += ["--latex", out_dir / latex_name]
+        for name, text in (labels or {}).items():
+            args += ["--label", f"{name}={text}"]
+        if group_names:
+            args += ["--group-names", *group_names]
     cli(*args)
     if plot_name and (out_dir / plot_name).is_file():
         display(Image(filename=str(out_dir / plot_name)))
+    if latex_name and (out_dir / latex_name).is_file():
+        print((out_dir / latex_name).read_text(encoding="utf-8"))
 
 
 def show_side_by_side(names, sequence, kind="iou_conf"):
