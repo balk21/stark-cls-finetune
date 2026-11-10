@@ -7,7 +7,7 @@ Modes (params.ft_mode):
                predicted box; with update_mode='max' this is the selected frame of the interval).
   (In 'none' mode STARK_ST is used directly instead of this class.)
 
-Shots (params.ft_shots, Talip's k-shot): the first fine-tuning uses the first frame and ft_shots - 1 more frames of
+Shots (params.ft_shots, k-shot): the first fine-tuning uses the first frame and ft_shots - 1 more frames of
 the same video, each with its ground-truth box, in one batch. The caller chooses them (ft_sampling.shot_frames) and
 passes them as info['ft_shots'] = [(image, box), ...] to initialize().
 

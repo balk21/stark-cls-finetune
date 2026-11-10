@@ -25,10 +25,9 @@ def jitter_box(bbox, rng: np.random.RandomState, center_jitter=4.5, scale_jitter
 
 
 def shot_frames(gt_boxes, shots: int, seed: int):
-    """Frames (0-based) of the first fine-tuning with ft_shots = `shots` (Talip's k-shot): frame 0 and `shots` - 1
-    frames drawn without replacement from the later frames where the target is visible (gt_boxes[i] is not None),
-    sorted. The same draw as Talip's tracker (np.random.default_rng(seed).choice), so the same seed gives the same
-    frames."""
+    """Frames (0-based) of the first fine-tuning with ft_shots = `shots` (k-shot): frame 0 and `shots` - 1 frames
+    drawn without replacement (np.random.default_rng(seed).choice) from the later frames where the target is visible
+    (gt_boxes[i] is not None), sorted; the same seed gives the same frames."""
     if shots < 1:
         raise ValueError(f"shots must be >= 1, got {shots}")
     if shots == 1:

@@ -1,4 +1,4 @@
-"""ft_shots (Talip's k-shot): which frames are chosen, that they are fine-tuned on in one batch, the experiment name
+"""ft_shots (k-shot): which frames are chosen, that they are fine-tuned on in one batch, the experiment name
 and that the evaluation leaves them out. Without a network or GPU."""
 from dataclasses import replace
 from types import SimpleNamespace
@@ -13,7 +13,7 @@ from stark_ft.test.tracker_factory import extra_shot_frames, shot_samples
 BOX = [10.0, 10.0, 40.0, 30.0]
 FAR = [200.0, 200.0, 10.0, 10.0]  # no overlap with BOX
 GT = [BOX] + [BOX if i % 3 else None for i in range(1, 100)]  # the target is absent in every third frame
-TALIP = dict(ft_mode="init", ft_shots=5, ft_pos_jitter=False, update_interval=99999, seed=42, sequences=["bull"])
+KSHOT = dict(ft_mode="init", ft_shots=5, ft_pos_jitter=False, update_interval=99999, seed=42, sequences=["bull"])
 
 
 def test_shot_frames():
@@ -21,7 +21,7 @@ def test_shot_frames():
     frames = shot_frames(GT, 5, 42)
     assert frames[0] == 0 and len(frames) == 5 and frames == sorted(set(frames))
     assert all(GT[i] is not None for i in frames)
-    # the draw of Talip's tracker (stark_st_finetune_multi.py): same seed -> same frames
+    # np.random.default_rng(seed).choice over the visible frames: same seed -> same frames
     eligible = [i for i in range(1, len(GT)) if GT[i] is not None]
     assert frames == [0] + sorted(np.random.default_rng(42).choice(eligible, 4, replace=False).tolist())
     assert shot_frames(GT, 10, 42)[:1] == [0] and len(shot_frames(GT, 10, 42)) == 10
@@ -33,7 +33,7 @@ def test_shot_frames():
 
 
 def test_config():
-    cfg = ExperimentConfig(**TALIP).validate()
+    cfg = ExperimentConfig(**KSHOT).validate()
     assert cfg.shots() == 5
     assert cfg.experiment_name == "st101_init_pos_5shot_lr0.0001_ep15_noupd_s42_nojit_bull"
     assert replace(cfg, ft_shots=1).experiment_name == "st101_init_pos_lr0.0001_ep15_noupd_s42_nojit_bull"
@@ -51,7 +51,7 @@ def test_config():
 
 
 def test_shot_samples():
-    cfg = ExperimentConfig(**TALIP)
+    cfg = ExperimentConfig(**KSHOT)
     images = [f"frame{i}.jpg" for i in range(len(GT))]
     frames, samples = shot_samples(cfg, GT, images, lambda path: path)
     assert frames == shot_frames(GT, 5, 42)[1:]

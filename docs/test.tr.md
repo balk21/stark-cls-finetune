@@ -58,7 +58,7 @@ kare + hedef kutusu
 | `ft_shots` | İlk fine-tune'un kareleri |
 |---|---|
 | `1` | ilk kare (tracker, VOT-LT protokolündeki gibi yalnızca ilk karenin kutusunu bilir) |
-| `k > 1` | Talip'in k-shot'ı: ilk kare + aynı videonun hedefin göründüğü karelerinden `seed` ile rastgele seçilen `k−1` kare, her biri kendi ground-truth kutusuyla, tek batch'te. Bu kareler değerlendirilmez; `events.txt` bunları listeler (`ft_shot`). |
+| `k > 1` | k-shot: ilk kare + aynı videonun hedefin göründüğü karelerinden `seed` ile rastgele seçilen `k−1` kare, her biri kendi ground-truth kutusuyla, tek batch'te. Bu kareler değerlendirilmez; `events.txt` bunları listeler (`ft_shot`). |
 
 ## Çalıştırma
 
@@ -69,7 +69,7 @@ python -m stark_ft smoke --frames 50                                   # isteğe
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # sade STARK-ST, resmi ağırlıklar
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<koşu adı>   # stark_ft train ile eğitilmiş bir model
-# Talip'in 5-shot'ı: ilk kare + ground truth'larıyla 4 rastgele kare, jitter'sız kutu, template update yok
+# 5-shot: ilk kare + ground truth'larıyla 4 rastgele kare, jitter'sız kutu, template update yok
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=init --set ft_shots=5 --set ft_pos_jitter=false \
     --set update_interval=99999 --set seed=42
 # STARK'ın yalnızca GOT-10k ağırlıkları: GOT-10k val'in tamamında / GOT-10k test bölümünde / VOT-LT2020'de
@@ -136,7 +136,7 @@ GOT-10k'da hem VOT-LT2020'de test edilebilirler. STARK GOT-10k'da
 | Yalnızca ilk karede fine-tune | `ft_mode="init"` |
 | İlk karede ve her template update'te fine-tune | `ft_mode="online"` |
 | Yalnızca pozitif / pozitif + negatif örnekler | `ft_samples="pos"` / `"posneg"` |
-| Videonun daha fazla karesiyle fine-tune (Talip'in k-shot'ı) | `ft_shots=5` / `10` (Talip'teki gibi: `ft_mode="init"`, `ft_pos_jitter=False`, `update_interval=99999`, `seed=42`) |
+| Videonun daha fazla karesiyle fine-tune (k-shot) | `ft_shots=5` / `10` |
 | Fine-tune'un gücü | `ft_lr`, `ft_epochs_init` (1. karedeki adım), `ft_epochs_online` (update başına adım) |
 | Her N karenin en iyi karesiyle template update | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Diziler | `sequences=["bull", "ballet"]` veya `"all"` |
@@ -212,7 +212,7 @@ ve/veya `--set anahtar=değer`.
 | `max_template_updates` | `-1` | Dizi başına; `-1` = sınırsız. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (bkz. [Yöntem](#yöntem)). |
 | `ft_samples` | `"pos"` | `"pos"` veya `"posneg"`. |
-| `ft_shots` | `1` | İlk fine-tune'un kareleri: `1` = ilk kare; `k` = + videonun ground truth'larıyla `k−1` rastgele karesi (Talip'in k-shot'ı, bkz. [Yöntem](#yöntem)); bu kareler değerlendirilmez. `got10k_test`'te kullanılamaz. |
+| `ft_shots` | `1` | İlk fine-tune'un kareleri: `1` = ilk kare; `k` = + videonun ground truth'larıyla `k−1` rastgele karesi (k-shot, bkz. [Yöntem](#yöntem)); bu kareler değerlendirilmez. `got10k_test`'te kullanılamaz. |
 | `ft_lr` | `1e-4` | AdamW öğrenme oranı (aşama-2 eğitimi: 1e-4). |
 | `ft_epochs_init` | `15` | İlk karedeki adım sayısı; `0` = yok. |
 | `ft_epochs_online` | `1` | Online fine-tune başına adım. |

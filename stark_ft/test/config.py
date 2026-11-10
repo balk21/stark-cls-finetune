@@ -63,7 +63,7 @@ class ExperimentConfig:
     # ---- Fine-tuning (STARK-ST only) ----
     ft_mode: str = "online"               # "none" | "init" | "online"
     ft_samples: str = "pos"               # "pos" | "posneg"
-    ft_shots: int = 1                     # 1 = first frame | k: + k-1 random frames with their ground truth (Talip)
+    ft_shots: int = 1                     # 1 = first frame | k: + k-1 random frames with their ground truth
     ft_lr: float = 1e-4
     ft_epochs_init: int = 15              # Number of fine-tuning steps on the first frame
     ft_epochs_online: int = 1             # Number of steps in every online fine-tuning session

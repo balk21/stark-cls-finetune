@@ -57,7 +57,7 @@ frame + target box
 | `ft_shots` | Frames of the first fine-tuning |
 |---|---|
 | `1` | the first frame (the tracker knows only the first frame's box, as in the VOT-LT protocol) |
-| `k > 1` | Talip's k-shot: the first frame + `k−1` frames of the same video where the target is visible, drawn at random with `seed`, each with its ground-truth box, in one batch. These frames are not evaluated; `events.txt` lists them (`ft_shot`). |
+| `k > 1` | k-shot: the first frame + `k−1` frames of the same video where the target is visible, drawn at random with `seed`, each with its ground-truth box, in one batch. These frames are not evaluated; `events.txt` lists them (`ft_shot`). |
 
 ## Running
 
@@ -68,7 +68,7 @@ python -m stark_ft smoke --frames 50                                   # optiona
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=none    # plain STARK-ST, official weights
 python -m stark_ft test --config configs/test_example.yaml --set ft_samples=posneg --set 'sequences=[bull]'
 python -m stark_ft test --set 'sequences=[bull]' --set weights=<run name>   # a model trained with stark_ft train
-# Talip's 5-shot: first frame + 4 random frames with their ground truth, exact box, no template update
+# 5-shot: first frame + 4 random frames with their ground truth, exact box, no template update
 python -m stark_ft test --set 'sequences=[bull]' --set ft_mode=init --set ft_shots=5 --set ft_pos_jitter=false \
     --set update_interval=99999 --set seed=42
 # STARK's GOT-10k-only weights on all GOT-10k val sequences / on the GOT-10k test split / on VOT-LT2020
@@ -135,7 +135,7 @@ STARK used `update_interval=200` on GOT-10k (100 on VOT-LT).
 | Fine-tuning on the first frame only | `ft_mode="init"` |
 | Fine-tuning on the first frame and at every template update | `ft_mode="online"` |
 | Positive samples only / positive + negative | `ft_samples="pos"` / `"posneg"` |
-| Fine-tuning on more frames of the video (Talip's k-shot) | `ft_shots=5` / `10` (as Talip: `ft_mode="init"`, `ft_pos_jitter=False`, `update_interval=99999`, `seed=42`) |
+| Fine-tuning on more frames of the video (k-shot) | `ft_shots=5` / `10` |
 | Strength of the fine-tuning | `ft_lr`, `ft_epochs_init` (steps on frame 1), `ft_epochs_online` (steps per update) |
 | Template update with the best frame of every N frames | `update_mode="max"` (`update_conf_thr`, `update_iou_thr`) |
 | Sequences | `sequences=["bull", "ballet"]` or `"all"` |
@@ -210,7 +210,7 @@ already in the dataset folder are only read; the `list.txt` vot-toolkit needs is
 | `max_template_updates` | `-1` | Per sequence; `-1` = unlimited. |
 | `ft_mode` | `"online"` | `"none"`, `"init"`, `"online"` (see [Method](#method)). |
 | `ft_samples` | `"pos"` | `"pos"` or `"posneg"`. |
-| `ft_shots` | `1` | Frames of the first fine-tuning: `1` = the first frame; `k` = + `k−1` random frames of the video with their ground truth (Talip's k-shot, see [Method](#method)); these frames are not evaluated. Not on `got10k_test`. |
+| `ft_shots` | `1` | Frames of the first fine-tuning: `1` = the first frame; `k` = + `k−1` random frames of the video with their ground truth (k-shot, see [Method](#method)); these frames are not evaluated. Not on `got10k_test`. |
 | `ft_lr` | `1e-4` | AdamW learning rate (stage-2 training: 1e-4). |
 | `ft_epochs_init` | `15` | Steps on the first frame; `0` = none. |
 | `ft_epochs_online` | `1` | Steps per online fine-tuning. |

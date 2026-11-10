@@ -8,7 +8,7 @@ update_mode: stark        # or max: the best-scoring frame of every update_inter
 update_interval: 100
 ft_mode: online
 ft_samples: pos
-ft_shots: 1               # 5 / 10: + 4 / 9 frames of the video with their ground truth (Talip's k-shot)
+ft_shots: 1               # 5 / 10: + 4 / 9 frames of the video with their ground truth (k-shot)
 ft_lr: 1.0e-4
 ft_epochs_init: 15
 ft_epochs_online: 1
